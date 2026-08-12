@@ -1,0 +1,21 @@
+{
+  "name": "NumaIQ",
+  "short_name": "NumaIQ",
+  "description": "AI voice agents and QA compliance platform",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "48x48",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "/og_image.png",
+      "sizes": "1200x630",
+      "type": "image/png"
+    }
+  ]
+}
