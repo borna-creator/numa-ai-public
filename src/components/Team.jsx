@@ -4,40 +4,30 @@ const team = [
     role: 'Founder, General Manager',
     region: 'UAE',
     email: 'ahmed@numa-iq.com',
-    phone: '+971 58 561 9100',
-    phoneTel: '+971585619100',
   },
   {
     name: 'Mounir Sahli',
     role: 'Chairman, Investor',
     region: 'UAE',
     email: 'mounir@numa-iq.com',
-    phone: '+971 52 558 2104',
-    phoneTel: '+971525582104',
   },
   {
     name: 'Jalel Ben Romdhane',
     role: 'Operating Partner',
     region: 'TUN',
     email: 'jalel@numa-iq.com',
-    phone: '+216 50 050 033',
-    phoneTel: '+21650050033',
   },
   {
     name: 'Mohamed Dhaou',
     role: 'Co-founder, CFO',
     region: 'TUN',
     email: 'cfo@numa-iq.com',
-    phone: '+216 26 457 448',
-    phoneTel: '+21626457448',
   },
   {
     name: 'Ala Ben Brahim',
     role: 'Sales',
     region: 'TUN',
     email: 'customer@numa-iq.com',
-    phone: '+216 52 390 760',
-    phoneTel: '+21652390760',
   },
 ]
 
@@ -90,7 +80,7 @@ export default function Team() {
                   <th className="px-6 py-3 text-xs font-bold uppercase tracking-wider text-slate-500">Name</th>
                   <th className="px-6 py-3 text-xs font-bold uppercase tracking-wider text-slate-500">Role</th>
                   <th className="px-6 py-3 text-xs font-bold uppercase tracking-wider text-slate-500">Region</th>
-                  <th className="px-6 py-3 text-xs font-bold uppercase tracking-wider text-slate-500">Contact</th>
+                  <th className="px-6 py-3 text-xs font-bold uppercase tracking-wider text-slate-500">Email</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -109,20 +99,12 @@ export default function Team() {
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex flex-col gap-1 text-sm">
-                        <a
-                          href={`mailto:${member.email}`}
-                          className="text-numa-600 hover:text-numa-700 transition-colors"
-                        >
-                          {member.email}
-                        </a>
-                        <a
-                          href={`tel:${member.phoneTel}`}
-                          className="text-slate-500 hover:text-slate-700 transition-colors"
-                        >
-                          {member.phone}
-                        </a>
-                      </div>
+                      <a
+                        href={`mailto:${member.email}`}
+                        className="text-sm text-numa-600 hover:text-numa-700 transition-colors"
+                      >
+                        {member.email}
+                      </a>
                     </td>
                   </tr>
                 ))}
@@ -131,7 +113,6 @@ export default function Team() {
           </div>
         </div>
 
-        {/* Mobile-friendly stacked cards (visible on small screens where table scrolls) */}
         <div className="grid gap-4 md:hidden">
           {team.map((member) => (
             <div
@@ -150,9 +131,6 @@ export default function Team() {
               <p className="text-sm text-slate-600 mb-3">{member.role}</p>
               <a href={`mailto:${member.email}`} className="block text-sm text-numa-600 hover:underline">
                 {member.email}
-              </a>
-              <a href={`tel:${member.phoneTel}`} className="block text-sm text-slate-500 mt-1 hover:underline">
-                {member.phone}
               </a>
             </div>
           ))}
