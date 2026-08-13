@@ -10,7 +10,14 @@ echo "==> Building NumaIQ for https://${DOMAIN}"
 export VITE_SITE_URL="https://${DOMAIN}"
 
 cd "$APP_DIR"
-npm ci
+
+if [ -f package-lock.json ]; then
+  npm ci
+else
+  echo "==> No package-lock.json found, running npm install instead"
+  npm install
+fi
+
 npm run build
 
 echo "==> Build complete. Output: ${APP_DIR}/dist"
