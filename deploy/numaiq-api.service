@@ -8,6 +8,7 @@ Type=simple
 User=generaladmin
 WorkingDirectory=/var/www/numaiq
 EnvironmentFile=/var/www/numaiq/.env
+ExecStartPre=/usr/bin/npx prisma generate
 ExecStart=/usr/bin/node server/index.js
 Restart=on-failure
 RestartSec=5

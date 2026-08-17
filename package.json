@@ -18,7 +18,7 @@
     "docker:down": "docker compose down"
   },
   "dependencies": {
-    "@prisma/client": "^7.9.1",
+    "@prisma/client": "^6.19.3",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
@@ -36,7 +36,7 @@
     "@vitejs/plugin-react": "^6.0.4",
     "concurrently": "^10.0.5",
     "oxlint": "^1.75.0",
-    "prisma": "^7.9.1",
+    "prisma": "^6.19.3",
     "tailwindcss": "^4.3.3",
     "vite": "^8.2.0"
   }

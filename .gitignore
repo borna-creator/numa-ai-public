@@ -25,4 +25,5 @@ dist-ssr
 *.sln
 *.sw?
 
+# Prisma (legacy generated path)
 /src/generated/prisma

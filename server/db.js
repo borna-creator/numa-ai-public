@@ -1,5 +1,5 @@
 import 'dotenv/config'
-import { PrismaClient } from '../src/generated/prisma/client.js'
+import { PrismaClient } from '@prisma/client'
 
 const globalForPrisma = globalThis
 
