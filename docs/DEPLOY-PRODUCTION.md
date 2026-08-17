@@ -233,3 +233,20 @@ sudo systemctl restart numaiq-api
    WEBSITE_DOMAIN=http://numa-iq.com
    ```
    After HTTPS is live, switch all three to `https://numa-iq.com`.
+
+### 500 on login (`SuperTokens core version is not compatible`)
+
+`supertokens-node` v24 requires SuperTokens **core 12.0+** (CDI 5.4). Core 11.x will return 500 on sign-in.
+
+```bash
+cd /var/www/numaiq
+git pull
+sudo docker compose pull supertokens
+sudo docker compose up -d supertokens
+sleep 15
+sudo systemctl restart numaiq-api
+curl -X POST http://127.0.0.1:3001/auth/signin \
+  -H 'Content-Type: application/json' \
+  -d '{"formFields":[{"id":"email","value":"test@test.com"},{"id":"password","value":"x"}]}'
+# Should return wrong-credentials JSON, not an HTML 500 error page
+```
