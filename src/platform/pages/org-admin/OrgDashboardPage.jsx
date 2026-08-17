@@ -1,23 +1,57 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../api.js'
 
-export default function OrgDashboardPage({ orgId }) {
+function ConfirmButton({ label, confirmMessage, onConfirm, className, disabled }) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={() => {
+        if (window.confirm(confirmMessage)) onConfirm()
+      }}
+      className={className}
+    >
+      {label}
+    </button>
+  )
+}
+
+export default function OrgDashboardPage({ orgId, mode = 'org-admin' }) {
+  const isSuperAdmin = mode === 'super-admin'
+  const [organization, setOrganization] = useState(null)
   const [departments, setDepartments] = useState([])
   const [users, setUsers] = useState([])
   const [deptName, setDeptName] = useState('')
   const [userForm, setUserForm] = useState({ email: '', password: '', departmentId: '' })
+  const [orgForm, setOrgForm] = useState({ name: '', slug: '' })
+  const [editingDept, setEditingDept] = useState(null)
+  const [editingUser, setEditingUser] = useState(null)
+  const [editUserForm, setEditUserForm] = useState({ email: '', password: '', departmentId: '' })
+  const [adminForm, setAdminForm] = useState({ email: '', password: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
 
   const load = async () => {
     try {
       setLoading(true)
-      const [deptData, userData] = await Promise.all([
+      const requests = [
         api(`/api/organizations/${orgId}/departments`),
         api(`/api/organizations/${orgId}/users`),
-      ])
-      setDepartments(deptData.departments)
-      setUsers(userData.users)
+      ]
+      if (isSuperAdmin) {
+        requests.unshift(api(`/api/organizations/${orgId}`))
+      }
+      const results = await Promise.all(requests)
+
+      if (isSuperAdmin) {
+        setOrganization(results[0].organization)
+        setOrgForm({ name: results[0].organization.name, slug: results[0].organization.slug })
+        setDepartments(results[1].departments)
+        setUsers(results[2].users)
+      } else {
+        setDepartments(results[0].departments)
+        setUsers(results[1].users)
+      }
     } catch (err) {
       setError(err.message)
     } finally {
@@ -26,47 +60,268 @@ export default function OrgDashboardPage({ orgId }) {
   }
 
   useEffect(() => {
-    load()
-  }, [orgId])
+    async function loadOrgData() {
+      try {
+        setLoading(true)
+        const requests = [
+          api(`/api/organizations/${orgId}/departments`),
+          api(`/api/organizations/${orgId}/users`),
+        ]
+        if (isSuperAdmin) {
+          requests.unshift(api(`/api/organizations/${orgId}`))
+        }
+        const results = await Promise.all(requests)
 
-  const createDepartment = async (e) => {
-    e.preventDefault()
+        if (isSuperAdmin) {
+          setOrganization(results[0].organization)
+          setOrgForm({ name: results[0].organization.name, slug: results[0].organization.slug })
+          setDepartments(results[1].departments)
+          setUsers(results[2].users)
+        } else {
+          setDepartments(results[0].departments)
+          setUsers(results[1].users)
+        }
+      } catch (err) {
+        setError(err.message)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadOrgData()
+  }, [orgId, isSuperAdmin])
+
+  const run = async (fn) => {
     setError('')
     try {
-      await api(`/api/organizations/${orgId}/departments`, {
-        method: 'POST',
-        body: JSON.stringify({ name: deptName }),
-      })
-      setDeptName('')
+      await fn()
       await load()
     } catch (err) {
       setError(err.message)
     }
   }
 
-  const createUser = async (e) => {
+  const createDepartment = (e) => {
     e.preventDefault()
-    setError('')
-    try {
+    run(async () => {
+      await api(`/api/organizations/${orgId}/departments`, {
+        method: 'POST',
+        body: JSON.stringify({ name: deptName }),
+      })
+      setDeptName('')
+    })
+  }
+
+  const updateDepartment = (departmentId, name) => {
+    run(async () => {
+      await api(`/api/organizations/${orgId}/departments/${departmentId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ name }),
+      })
+      setEditingDept(null)
+    })
+  }
+
+  const deleteDepartment = (departmentId) => {
+    run(async () => {
+      await api(`/api/organizations/${orgId}/departments/${departmentId}`, { method: 'DELETE' })
+    })
+  }
+
+  const createUser = (e) => {
+    e.preventDefault()
+    run(async () => {
       await api(`/api/organizations/${orgId}/users`, {
         method: 'POST',
         body: JSON.stringify(userForm),
       })
       setUserForm({ email: '', password: '', departmentId: '' })
-      await load()
-    } catch (err) {
-      setError(err.message)
-    }
+    })
+  }
+
+  const startEditUser = (user) => {
+    setEditingUser(user.id)
+    setEditUserForm({
+      email: user.email,
+      password: '',
+      departmentId: user.departmentId || '',
+    })
+  }
+
+  const updateUser = (userId) => {
+    const body = { email: editUserForm.email.trim() }
+    if (editUserForm.password.trim()) body.password = editUserForm.password
+    if (editUserForm.departmentId) body.departmentId = editUserForm.departmentId
+
+    run(async () => {
+      await api(`/api/organizations/${orgId}/users/${userId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      })
+      setEditingUser(null)
+    })
+  }
+
+  const deleteUser = (userId) => {
+    run(async () => {
+      await api(`/api/organizations/${orgId}/users/${userId}`, { method: 'DELETE' })
+    })
+  }
+
+  const updateOrganization = (e) => {
+    e.preventDefault()
+    run(async () => {
+      await api(`/api/organizations/${orgId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(orgForm),
+      })
+    })
   }
 
   if (loading) {
     return <p className="text-slate-500 text-sm">Loading…</p>
   }
 
+  const orgAdmins = users.filter((u) => u.role === 'ORG_ADMIN')
+  const orgUsers = users.filter((u) => u.role === 'USER')
+
   return (
     <div className="space-y-8">
       {error && (
         <div className="p-3 rounded-xl bg-red-50 text-red-700 text-sm border border-red-100">{error}</div>
+      )}
+
+      {isSuperAdmin && organization && (
+        <section className="rounded-2xl border border-slate-200/80 bg-white p-6">
+          <h2 className="text-lg font-semibold text-slate-900 mb-4">Organization settings</h2>
+          <form onSubmit={updateOrganization} className="grid sm:grid-cols-2 gap-4">
+            <input
+              placeholder="Organization name"
+              required
+              value={orgForm.name}
+              onChange={(e) => setOrgForm({ ...orgForm, name: e.target.value })}
+              className="px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-numa-500/30"
+            />
+            <input
+              placeholder="Slug"
+              required
+              value={orgForm.slug}
+              onChange={(e) => setOrgForm({ ...orgForm, slug: e.target.value })}
+              className="px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-numa-500/30"
+            />
+            <button
+              type="submit"
+              className="sm:col-span-2 py-2.5 rounded-xl font-semibold text-white bg-numa-600 hover:bg-numa-700"
+            >
+              Save organization
+            </button>
+          </form>
+        </section>
+      )}
+
+      {isSuperAdmin && (
+        <section className="rounded-2xl border border-slate-200/80 bg-white p-6">
+          <h2 className="text-lg font-semibold text-slate-900 mb-4">Organization admins</h2>
+          {orgAdmins.length === 0 && (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                run(async () => {
+                  await api(`/api/organizations/${orgId}/users`, {
+                    method: 'POST',
+                    body: JSON.stringify({ ...adminForm, role: 'ORG_ADMIN' }),
+                  })
+                  setAdminForm({ email: '', password: '' })
+                })
+              }}
+              className="grid sm:grid-cols-2 gap-3 mb-4"
+            >
+              <input
+                type="email"
+                placeholder="Org admin email"
+                required
+                value={adminForm.email}
+                onChange={(e) => setAdminForm({ ...adminForm, email: e.target.value })}
+                className="px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
+              />
+              <input
+                type="password"
+                placeholder="Password (min 8 chars)"
+                required
+                minLength={8}
+                value={adminForm.password}
+                onChange={(e) => setAdminForm({ ...adminForm, password: e.target.value })}
+                className="px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
+              />
+              <button
+                type="submit"
+                className="sm:col-span-2 py-2.5 rounded-xl text-sm font-semibold text-white bg-numa-600 hover:bg-numa-700"
+              >
+                Add org admin
+              </button>
+            </form>
+          )}
+          {orgAdmins.length > 0 && (
+            <ul className="divide-y divide-slate-100 rounded-xl border border-slate-100">
+              {orgAdmins.map((admin) => (
+                <li key={admin.id} className="px-4 py-3">
+                  {editingUser === admin.id ? (
+                    <div className="grid sm:grid-cols-2 gap-3">
+                      <input
+                        type="email"
+                        value={editUserForm.email}
+                        onChange={(e) => setEditUserForm({ ...editUserForm, email: e.target.value })}
+                        className="px-3 py-2 rounded-lg border border-slate-200 text-sm"
+                      />
+                      <input
+                        type="password"
+                        placeholder="New password (optional)"
+                        value={editUserForm.password}
+                        onChange={(e) => setEditUserForm({ ...editUserForm, password: e.target.value })}
+                        className="px-3 py-2 rounded-lg border border-slate-200 text-sm"
+                      />
+                      <div className="sm:col-span-2 flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => updateUser(admin.id)}
+                          className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-numa-600"
+                        >
+                          Save
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditingUser(null)}
+                          className="px-4 py-2 rounded-lg text-sm text-slate-600 border border-slate-200"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-sm">
+                      <span className="font-medium text-slate-900">{admin.email}</span>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => startEditUser(admin)}
+                          className="text-numa-600 hover:underline"
+                        >
+                          Edit
+                        </button>
+                        <ConfirmButton
+                          label="Delete"
+                          confirmMessage={`Remove org admin ${admin.email}?`}
+                          onConfirm={() => deleteUser(admin.id)}
+                          className="text-red-600 hover:underline"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
       )}
 
       <section className="rounded-2xl border border-slate-200/80 bg-white p-6">
@@ -88,9 +343,55 @@ export default function OrgDashboardPage({ orgId }) {
         ) : (
           <ul className="divide-y divide-slate-100 rounded-xl border border-slate-100">
             {departments.map((d) => (
-              <li key={d.id} className="px-4 py-3 flex justify-between text-sm">
-                <span className="font-medium text-slate-900">{d.name}</span>
-                <span className="text-slate-500">{d._count.users} users</span>
+              <li key={d.id} className="px-4 py-3">
+                {editingDept === d.id ? (
+                  <form
+                    className="flex gap-2"
+                    onSubmit={(e) => {
+                      e.preventDefault()
+                      updateDepartment(d.id, new FormData(e.currentTarget).get('name'))
+                    }}
+                  >
+                    <input
+                      name="name"
+                      defaultValue={d.name}
+                      required
+                      className="flex-1 px-3 py-2 rounded-lg border border-slate-200 text-sm"
+                    />
+                    <button type="submit" className="px-3 py-2 rounded-lg text-sm font-semibold text-white bg-numa-600">
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingDept(null)}
+                      className="px-3 py-2 rounded-lg text-sm text-slate-600 border border-slate-200"
+                    >
+                      Cancel
+                    </button>
+                  </form>
+                ) : (
+                  <div className="flex justify-between items-center text-sm gap-2">
+                    <div>
+                      <span className="font-medium text-slate-900">{d.name}</span>
+                      <span className="text-slate-500 ml-2">{d._count.users} users</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setEditingDept(d.id)}
+                        className="text-numa-600 hover:underline"
+                      >
+                        Edit
+                      </button>
+                      <ConfirmButton
+                        label="Delete"
+                        confirmMessage={`Delete department "${d.name}"? Users will be unassigned from it.`}
+                        onConfirm={() => deleteDepartment(d.id)}
+                        className="text-red-600 hover:underline"
+                      />
+                    </div>
+                  </div>
+                )}
               </li>
             ))}
           </ul>
@@ -136,14 +437,77 @@ export default function OrgDashboardPage({ orgId }) {
             Create user
           </button>
         </form>
-        {users.length === 0 ? (
+        {orgUsers.length === 0 ? (
           <p className="text-sm text-slate-500">No users yet.</p>
         ) : (
           <ul className="divide-y divide-slate-100 rounded-xl border border-slate-100">
-            {users.map((u) => (
-              <li key={u.id} className="px-4 py-3 flex flex-col sm:flex-row sm:justify-between gap-1 text-sm">
-                <span className="font-medium text-slate-900">{u.email}</span>
-                <span className="text-slate-500">{u.department?.name || '—'}</span>
+            {orgUsers.map((u) => (
+              <li key={u.id} className="px-4 py-3">
+                {editingUser === u.id ? (
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    <input
+                      type="email"
+                      value={editUserForm.email}
+                      onChange={(e) => setEditUserForm({ ...editUserForm, email: e.target.value })}
+                      className="px-3 py-2 rounded-lg border border-slate-200 text-sm"
+                    />
+                    <input
+                      type="password"
+                      placeholder="New password (optional)"
+                      value={editUserForm.password}
+                      onChange={(e) => setEditUserForm({ ...editUserForm, password: e.target.value })}
+                      className="px-3 py-2 rounded-lg border border-slate-200 text-sm"
+                    />
+                    <select
+                      value={editUserForm.departmentId}
+                      onChange={(e) => setEditUserForm({ ...editUserForm, departmentId: e.target.value })}
+                      className="sm:col-span-2 px-3 py-2 rounded-lg border border-slate-200 text-sm"
+                    >
+                      <option value="">No department</option>
+                      {departments.map((d) => (
+                        <option key={d.id} value={d.id}>{d.name}</option>
+                      ))}
+                    </select>
+                    <div className="sm:col-span-2 flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => updateUser(u.id)}
+                        className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-numa-600"
+                      >
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditingUser(null)}
+                        className="px-4 py-2 rounded-lg text-sm text-slate-600 border border-slate-200"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 text-sm">
+                    <div>
+                      <span className="font-medium text-slate-900">{u.email}</span>
+                      <span className="text-slate-500 ml-2">{u.department?.name || '—'}</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => startEditUser(u)}
+                        className="text-numa-600 hover:underline"
+                      >
+                        Edit
+                      </button>
+                      <ConfirmButton
+                        label="Delete"
+                        confirmMessage={`Delete user ${u.email}?`}
+                        onConfirm={() => deleteUser(u.id)}
+                        className="text-red-600 hover:underline"
+                      />
+                    </div>
+                  </div>
+                )}
               </li>
             ))}
           </ul>

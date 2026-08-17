@@ -3,6 +3,7 @@ import { AuthProvider } from './context/AuthContext.jsx'
 import { ProtectedRoute } from './components/ProtectedRoute.jsx'
 import LoginPage from './pages/LoginPage.jsx'
 import DashboardPage from './pages/DashboardPage.jsx'
+import OrgDetailPage from './pages/super-admin/OrgDetailPage.jsx'
 
 export default function PlatformApp() {
   return (
@@ -14,6 +15,7 @@ export default function PlatformApp() {
         </Route>
         <Route element={<ProtectedRoute roles={['SUPER_ADMIN']} />}>
           <Route path="admin" element={<DashboardPage />} />
+          <Route path="admin/orgs/:orgId" element={<OrgDetailPage />} />
         </Route>
         <Route element={<ProtectedRoute roles={['ORG_ADMIN']} />}>
           <Route path="org" element={<DashboardPage />} />

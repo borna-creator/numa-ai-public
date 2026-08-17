@@ -62,6 +62,42 @@ router.post('/', async (req, res, next) => {
   }
 })
 
+router.patch('/:departmentId', async (req, res, next) => {
+  try {
+    const organizationId = resolveOrgId(req)
+    const { name } = req.body
+
+    if (!name?.trim()) {
+      return res.status(400).json({ error: 'Department name is required' })
+    }
+
+    if (req.appUser.role === 'ORG_ADMIN' && req.appUser.organizationId !== organizationId) {
+      return res.status(403).json({ error: 'Cannot modify another organization' })
+    }
+
+    const department = await prisma.department.findFirst({
+      where: { id: req.params.departmentId, organizationId },
+    })
+
+    if (!department) {
+      return res.status(404).json({ error: 'Department not found' })
+    }
+
+    const updated = await prisma.department.update({
+      where: { id: department.id },
+      data: { name: name.trim() },
+      include: { _count: { select: { users: true } } },
+    })
+
+    res.json({ department: updated })
+  } catch (err) {
+    if (err.code === 'P2002') {
+      return res.status(409).json({ error: 'Department name already exists in this organization' })
+    }
+    next(err)
+  }
+})
+
 router.delete('/:departmentId', async (req, res, next) => {
   try {
     const organizationId = resolveOrgId(req)

@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { prisma } from '../db.js'
 import { requireSession, loadAppUser, requireSuperAdmin } from '../middleware/auth.js'
-import { createAuthUser, slugify } from '../services/users.js'
+import { createAuthUser, slugify, deleteAuthUser } from '../services/users.js'
 
 const router = Router()
 
@@ -106,9 +106,75 @@ router.get('/:orgId', async (req, res, next) => {
   }
 })
 
+router.patch('/:orgId', async (req, res, next) => {
+  try {
+    const { name, slug } = req.body
+    const organization = await prisma.organization.findUnique({ where: { id: req.params.orgId } })
+
+    if (!organization) {
+      return res.status(404).json({ error: 'Organization not found' })
+    }
+
+    const data = {}
+    if (name !== undefined) {
+      if (!name?.trim()) {
+        return res.status(400).json({ error: 'Organization name cannot be empty' })
+      }
+      data.name = name.trim()
+    }
+    if (slug !== undefined) {
+      const orgSlug = slug?.trim() || slugify(data.name || organization.name)
+      if (!orgSlug) {
+        return res.status(400).json({ error: 'Organization slug cannot be empty' })
+      }
+      const existingOrg = await prisma.organization.findFirst({
+        where: { slug: orgSlug, NOT: { id: organization.id } },
+      })
+      if (existingOrg) {
+        return res.status(409).json({ error: 'Organization slug already exists' })
+      }
+      data.slug = orgSlug
+    }
+
+    if (Object.keys(data).length === 0) {
+      return res.status(400).json({ error: 'No fields to update' })
+    }
+
+    const updated = await prisma.organization.update({
+      where: { id: organization.id },
+      data,
+      include: {
+        users: { where: { role: 'ORG_ADMIN' }, select: { id: true, email: true, createdAt: true } },
+        _count: { select: { departments: true, users: true } },
+      },
+    })
+
+    res.json({ organization: updated })
+  } catch (err) {
+    next(err)
+  }
+})
+
 router.delete('/:orgId', async (req, res, next) => {
   try {
-    await prisma.organization.delete({ where: { id: req.params.orgId } })
+    const organization = await prisma.organization.findUnique({
+      where: { id: req.params.orgId },
+      include: { users: true },
+    })
+
+    if (!organization) {
+      return res.status(404).json({ error: 'Organization not found' })
+    }
+
+    for (const user of organization.users) {
+      try {
+        await deleteAuthUser(user.superTokensUserId)
+      } catch (err) {
+        console.error(`Failed to delete auth user ${user.email}:`, err.message)
+      }
+    }
+
+    await prisma.organization.delete({ where: { id: organization.id } })
     res.status(204).send()
   } catch (err) {
     if (err.code === 'P2025') {

@@ -92,3 +92,45 @@ SUPER_ADMIN_PASSWORD=your-strong-password
 ```
 
 `POSTGRES_PASSWORD` in `.env` must match the password in `DATABASE_URL`.
+
+---
+
+## Core upgrade: `time_joined` column missing (core 11 → 12)
+
+If logs show:
+
+```
+Supreme admin seed failed ... column "time_joined" of relation "app_id_to_user_id" does not exist
+```
+
+SuperTokens core 12 is running against an old core 11 database schema. Reset **only** the `supertokens` database (keeps your app `numaiq` data):
+
+```bash
+cd /var/www/numaiq
+sudo systemctl stop numaiq-api
+sudo docker compose stop supertokens
+
+# Recreate the supertokens database with a fresh schema
+sudo docker exec numaiq-db-1 psql -U numaiq -d postgres -c "DROP DATABASE IF EXISTS supertokens;"
+sudo docker exec numaiq-db-1 psql -U numaiq -d postgres -c "CREATE DATABASE supertokens;"
+
+sudo docker compose up -d supertokens
+sleep 15
+
+# If a previous seed partially created a Prisma row without a matching auth user, remove it
+sudo docker exec numaiq-db-1 psql -U numaiq -d numaiq -c "DELETE FROM \"User\" WHERE role = 'SUPER_ADMIN';"
+
+sudo systemctl start numaiq-api
+sudo journalctl -u numaiq-api -n 20 --no-pager | grep -i admin
+# Expect: "Supreme admin created: admin@numa-iq.com"
+```
+
+Then test sign-in:
+
+```bash
+curl -X POST http://127.0.0.1:3001/auth/signin \
+  -H 'Content-Type: application/json' \
+  -d '{"formFields":[{"id":"email","value":"admin@numa-iq.com"},{"id":"password","value":"YOUR_PASSWORD_FROM_ENV"}]}'
+```
+
+If you have **no app data to keep**, the full volume reset in the section above is simpler.

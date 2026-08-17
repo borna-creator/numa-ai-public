@@ -15,7 +15,7 @@ Auth, organizations, departments, and users. Built step-by-step before call scor
 
 | Role | Capabilities |
 |------|----------------|
-| **SUPER_ADMIN** | Seeded on first start. Creates organizations and org admins. |
+| **SUPER_ADMIN** | Full CRUD on all organizations, org admins, departments, and users. |
 | **ORG_ADMIN** | Manages departments and users within their organization. |
 | **USER** | Standard member (scoring features coming later). |
 
@@ -72,9 +72,11 @@ Use the credentials from `SUPER_ADMIN_EMAIL` / `SUPER_ADMIN_PASSWORD` in `.env`.
 |--------|------|------|
 | GET | `/api/me` | Any authenticated user |
 | GET/POST | `/api/organizations` | SUPER_ADMIN |
-| GET/DELETE | `/api/organizations/:orgId` | SUPER_ADMIN |
-| GET/POST | `/api/organizations/:orgId/departments` | ORG_ADMIN, SUPER_ADMIN |
-| GET/POST | `/api/organizations/:orgId/users` | ORG_ADMIN, SUPER_ADMIN |
+| GET/PATCH/DELETE | `/api/organizations/:orgId` | SUPER_ADMIN |
+| GET/POST/PATCH/DELETE | `/api/organizations/:orgId/departments` | ORG_ADMIN, SUPER_ADMIN |
+| GET/POST/PATCH/DELETE | `/api/organizations/:orgId/users` | ORG_ADMIN, SUPER_ADMIN |
+
+SUPER_ADMIN can manage any organization via `:orgId` in nested routes. ORG_ADMIN is scoped to their own org. SUPER_ADMIN can also create, edit, and delete org admins via the users routes.
 
 Auth endpoints are handled by SuperTokens at `/auth/*`.
 

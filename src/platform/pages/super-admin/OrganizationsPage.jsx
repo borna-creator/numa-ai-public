@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { api } from '../../api.js'
 
 export default function OrganizationsPage() {
@@ -45,6 +46,17 @@ export default function OrganizationsPage() {
       setError(err.message)
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  const handleDelete = async (org) => {
+    if (!window.confirm(`Delete "${org.name}" and all its users? This cannot be undone.`)) return
+    setError('')
+    try {
+      await api(`/api/organizations/${org.id}`, { method: 'DELETE' })
+      await load()
+    } catch (err) {
+      setError(err.message)
     }
   }
 
@@ -108,7 +120,7 @@ export default function OrganizationsPage() {
         ) : (
           <div className="divide-y divide-slate-100">
             {organizations.map((org) => (
-              <div key={org.id} className="px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <div key={org.id} className="px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div>
                   <p className="font-semibold text-slate-900">{org.name}</p>
                   <p className="text-sm text-slate-500">
@@ -117,6 +129,21 @@ export default function OrganizationsPage() {
                   {org.users[0] && (
                     <p className="text-sm text-numa-600 mt-1">Admin: {org.users[0].email}</p>
                   )}
+                </div>
+                <div className="flex gap-3 shrink-0">
+                  <Link
+                    to={`/platform/admin/orgs/${org.id}`}
+                    className="px-4 py-2 rounded-xl text-sm font-semibold text-white bg-numa-600 hover:bg-numa-700"
+                  >
+                    Manage
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(org)}
+                    className="px-4 py-2 rounded-xl text-sm font-semibold text-red-600 border border-red-200 hover:bg-red-50"
+                  >
+                    Delete
+                  </button>
                 </div>
               </div>
             ))}
