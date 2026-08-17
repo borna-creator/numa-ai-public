@@ -1,5 +1,5 @@
 import EmailPassword from 'supertokens-node/recipe/emailpassword/index.js'
-import { prisma } from './db.js'
+import { prisma } from '../db.js'
 
 export async function createAuthUser(email, password) {
   const response = await EmailPassword.signUp('public', email, password)
