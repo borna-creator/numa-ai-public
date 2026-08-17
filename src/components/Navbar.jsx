@@ -36,6 +36,12 @@ export default function Navbar() {
 
           <div className="hidden md:flex items-center gap-3">
             <a
+              href="/platform/login"
+              className="text-sm font-medium text-slate-600 hover:text-numa-600 transition-colors"
+            >
+              Platform
+            </a>
+            <a
               href="/#contact"
               className="inline-flex items-center px-5 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-numa-600 to-cyan-500 rounded-xl hover:shadow-lg hover:shadow-numa-500/30 transition-all hover:-translate-y-0.5"
             >

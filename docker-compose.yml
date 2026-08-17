@@ -1,0 +1,31 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: numaiq
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-numaiq}
+      POSTGRES_DB: numaiq
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U numaiq -d numaiq"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  supertokens:
+    image: registry.supertokens.io/supertokens/supertokens-postgresql:11.0
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:3567:3567"
+    environment:
+      POSTGRESQL_CONNECTION_URI: postgresql://numaiq:${POSTGRES_PASSWORD:-numaiq}@db:5432/numaiq
+
+volumes:
+  pgdata:
