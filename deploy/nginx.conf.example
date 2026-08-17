@@ -1,5 +1,11 @@
 # Nginx — NumaIQ marketing site + QA platform API
 # /etc/nginx/sites-available/numaiq
+#
+# After copying this file, run certbot to enable HTTPS:
+#   sudo certbot --nginx -d numa-iq.com -d www.numa-iq.com
+#
+# If certbot already ran but /auth returns errors on HTTPS, open the SSL
+# server block and ensure the /auth and /api locations below are present there too.
 
 server {
     listen 80;
@@ -16,6 +22,7 @@ server {
     # SuperTokens auth + API (Node on port 3001)
     location /auth {
         proxy_pass http://127.0.0.1:3001;
+        proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -24,6 +31,7 @@ server {
 
     location /api {
         proxy_pass http://127.0.0.1:3001;
+        proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -46,4 +54,22 @@ server {
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 }
 
-# certbot --nginx -d numa-iq.com -d www.numa-iq.com
+# --- HTTPS block (certbot creates this; keep /auth and /api if you edit by hand) ---
+#
+# server {
+#     listen 443 ssl;
+#     listen [::]:443 ssl;
+#     server_name numa-iq.com www.numa-iq.com;
+#
+#     ssl_certificate /etc/letsencrypt/live/numa-iq.com/fullchain.pem;
+#     ssl_certificate_key /etc/letsencrypt/live/numa-iq.com/privkey.pem;
+#     include /etc/letsencrypt/options-ssl-nginx.conf;
+#     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+#
+#     root /var/www/numaiq/dist;
+#     index index.html;
+#
+#     location /auth { ... same proxy block as above ... }
+#     location /api  { ... same proxy block as above ... }
+#     location /     { try_files $uri $uri/ /index.html; }
+# }

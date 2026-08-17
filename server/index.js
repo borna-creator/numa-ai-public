@@ -14,11 +14,42 @@ initSuperTokens()
 
 const app = express()
 const PORT = process.env.API_PORT || 3001
-const websiteDomain = process.env.WEBSITE_DOMAIN || 'http://localhost:5173'
+
+function getAllowedOrigins() {
+  const base = process.env.WEBSITE_DOMAIN || 'http://localhost:5173'
+  const origins = new Set([base])
+
+  try {
+    const url = new URL(base)
+    const bareHost = url.hostname.replace(/^www\./, '')
+    const hosts = new Set([url.hostname, `www.${bareHost}`, bareHost])
+    const schemes = url.protocol === 'https:' ? ['https:', 'http:'] : ['http:', 'https:']
+
+    for (const scheme of schemes) {
+      for (const host of hosts) {
+        origins.add(`${scheme}//${host}`)
+      }
+    }
+  } catch {
+    // ignore invalid WEBSITE_DOMAIN
+  }
+
+  return [...origins]
+}
+
+const allowedOrigins = getAllowedOrigins()
+
+app.set('trust proxy', 1)
 
 app.use(
   cors({
-    origin: websiteDomain,
+    origin(origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, origin || allowedOrigins[0])
+      } else {
+        callback(new Error(`Origin not allowed: ${origin}`))
+      }
+    },
     allowedHeaders: ['content-type', ...supertokens.getAllCORSHeaders()],
     credentials: true,
   }),

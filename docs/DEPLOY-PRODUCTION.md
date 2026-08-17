@@ -197,7 +197,39 @@ sudo systemctl restart numaiq-api
 | Problem | Fix |
 |---------|-----|
 | API won't start | `sudo journalctl -u numaiq-api -n 50` |
-| Login fails | Check `API_DOMAIN` and `WEBSITE_DOMAIN` are both `https://numa-iq.com` |
+| Login fails / CORS on `/auth/session/refresh` | See **Auth login errors** below |
 | DB connection error | `docker compose ps`, verify `DATABASE_URL` password matches |
 | 502 on /auth or /api | `sudo systemctl status numaiq-api` |
-| CORS errors | `WEBSITE_DOMAIN` must match browser URL exactly |
+| CORS errors | `WEBSITE_DOMAIN` must match browser URL (http vs https, www vs bare) |
+
+### Auth login errors (`Could not connect` / CORS on refresh)
+
+1. **Check API is up**
+   ```bash
+   curl http://127.0.0.1:3001/health
+   curl -X POST http://127.0.0.1:3001/auth/session/refresh
+   ```
+
+2. **Check nginx proxies `/auth` on the same scheme you use in the browser**
+   ```bash
+   curl -I http://numa-iq.com/auth/session/refresh
+   curl -I https://numa-iq.com/auth/session/refresh   # must not be "connection refused"
+   ```
+   If HTTPS fails but HTTP works, run `sudo certbot --nginx -d numa-iq.com -d www.numa-iq.com`, then confirm the **443** server block in `/etc/nginx/sites-available/numaiq` includes the `/auth` and `/api` `location` blocks (certbot sometimes omits them).
+
+3. **Rebuild frontend after pulling** (auth must call the same origin as the page)
+   ```bash
+   cd /var/www/numaiq
+   git pull
+   npm run build
+   sudo systemctl restart numaiq-api
+   sudo systemctl reload nginx
+   ```
+
+4. **Match `.env` to how users reach the site** — if still on HTTP only:
+   ```env
+   VITE_WEBSITE_DOMAIN=http://numa-iq.com
+   API_DOMAIN=http://numa-iq.com
+   WEBSITE_DOMAIN=http://numa-iq.com
+   ```
+   After HTTPS is live, switch all three to `https://numa-iq.com`.
