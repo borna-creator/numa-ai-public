@@ -1,7 +1,7 @@
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import PlatformLayout from '../components/PlatformLayout.jsx'
-import OrganizationsPage from './super-admin/OrganizationsPage.jsx'
+import SuperAdminPage from './super-admin/SuperAdminPage.jsx'
 import OrgDashboardPage from './org-admin/OrgDashboardPage.jsx'
 
 export default function DashboardPage() {
@@ -10,7 +10,7 @@ export default function DashboardPage() {
   if (user?.role === 'SUPER_ADMIN') {
     return (
       <PlatformLayout title="Super Admin">
-        <OrganizationsPage />
+        <SuperAdminPage />
       </PlatformLayout>
     )
   }

@@ -16,8 +16,17 @@ function ConfirmButton({ label, confirmMessage, onConfirm, className, disabled }
   )
 }
 
-export default function OrgDashboardPage({ orgId, mode = 'org-admin' }) {
+export default function OrgDashboardPage({
+  orgId,
+  mode = 'org-admin',
+  activeSection,
+  onOrgUpdated,
+}) {
   const isSuperAdmin = mode === 'super-admin'
+  const showAll = !activeSection || activeSection === 'all'
+  const showOrganization = showAll || activeSection === 'organization'
+  const showDepartments = showAll || activeSection === 'departments'
+  const showUsers = showAll || activeSection === 'users'
   const [organization, setOrganization] = useState(null)
   const [departments, setDepartments] = useState([])
   const [users, setUsers] = useState([])
@@ -101,6 +110,11 @@ export default function OrgDashboardPage({ orgId, mode = 'org-admin' }) {
     }
   }
 
+  const runAndNotify = async (fn) => {
+    await run(fn)
+    onOrgUpdated?.()
+  }
+
   const createDepartment = (e) => {
     e.preventDefault()
     run(async () => {
@@ -170,7 +184,7 @@ export default function OrgDashboardPage({ orgId, mode = 'org-admin' }) {
 
   const updateOrganization = (e) => {
     e.preventDefault()
-    run(async () => {
+    runAndNotify(async () => {
       await api(`/api/organizations/${orgId}`, {
         method: 'PATCH',
         body: JSON.stringify(orgForm),
@@ -184,15 +198,18 @@ export default function OrgDashboardPage({ orgId, mode = 'org-admin' }) {
 
   const orgAdmins = users.filter((u) => u.role === 'ORG_ADMIN')
   const orgUsers = users.filter((u) => u.role === 'USER')
+  const sectionClass = activeSection
+    ? 'space-y-4'
+    : 'rounded-2xl border border-slate-200/80 bg-white p-6'
 
   return (
-    <div className="space-y-8">
+    <div className={activeSection ? 'space-y-6' : 'space-y-8'}>
       {error && (
         <div className="p-3 rounded-xl bg-red-50 text-red-700 text-sm border border-red-100">{error}</div>
       )}
 
-      {isSuperAdmin && organization && (
-        <section className="rounded-2xl border border-slate-200/80 bg-white p-6">
+      {isSuperAdmin && showOrganization && organization && (
+        <section className={sectionClass}>
           <h2 className="text-lg font-semibold text-slate-900 mb-4">Organization settings</h2>
           <form onSubmit={updateOrganization} className="grid sm:grid-cols-2 gap-4">
             <input
@@ -219,8 +236,8 @@ export default function OrgDashboardPage({ orgId, mode = 'org-admin' }) {
         </section>
       )}
 
-      {isSuperAdmin && (
-        <section className="rounded-2xl border border-slate-200/80 bg-white p-6">
+      {isSuperAdmin && showOrganization && (
+        <section className={sectionClass}>
           <h2 className="text-lg font-semibold text-slate-900 mb-4">Organization admins</h2>
           {orgAdmins.length === 0 && (
             <form
@@ -324,7 +341,8 @@ export default function OrgDashboardPage({ orgId, mode = 'org-admin' }) {
         </section>
       )}
 
-      <section className="rounded-2xl border border-slate-200/80 bg-white p-6">
+      {showDepartments && (
+      <section className={sectionClass}>
         <h2 className="text-lg font-semibold text-slate-900 mb-4">Departments</h2>
         <form onSubmit={createDepartment} className="flex gap-3 mb-4">
           <input
@@ -339,7 +357,9 @@ export default function OrgDashboardPage({ orgId, mode = 'org-admin' }) {
           </button>
         </form>
         {departments.length === 0 ? (
-          <p className="text-sm text-slate-500">No departments yet. Create one before adding users.</p>
+          <p className="text-sm text-slate-500">
+            No departments yet. Add at least one department, then switch to the Users tab to add team members.
+          </p>
         ) : (
           <ul className="divide-y divide-slate-100 rounded-xl border border-slate-100">
             {departments.map((d) => (
@@ -397,8 +417,10 @@ export default function OrgDashboardPage({ orgId, mode = 'org-admin' }) {
           </ul>
         )}
       </section>
+      )}
 
-      <section className="rounded-2xl border border-slate-200/80 bg-white p-6">
+      {showUsers && (
+      <section className={sectionClass}>
         <h2 className="text-lg font-semibold text-slate-900 mb-4">Users</h2>
         <form onSubmit={createUser} className="grid sm:grid-cols-2 gap-3 mb-4">
           <input
@@ -513,6 +535,7 @@ export default function OrgDashboardPage({ orgId, mode = 'org-admin' }) {
           </ul>
         )}
       </section>
+      )}
     </div>
   )
 }
