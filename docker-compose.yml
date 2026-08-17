@@ -10,6 +10,7 @@ services:
       - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./docker/init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U numaiq -d numaiq"]
       interval: 5s
@@ -25,7 +26,8 @@ services:
     ports:
       - "127.0.0.1:3567:3567"
     environment:
-      POSTGRESQL_CONNECTION_URI: postgresql://numaiq:${POSTGRES_PASSWORD:-numaiq}@db:5432/numaiq
+      # IMPORTANT: separate DB from the app — never share with Prisma
+      POSTGRESQL_CONNECTION_URI: postgresql://numaiq:${POSTGRES_PASSWORD:-numaiq}@db:5432/supertokens
 
 volumes:
   pgdata:

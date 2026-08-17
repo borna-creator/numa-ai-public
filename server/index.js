@@ -39,7 +39,11 @@ app.use('/api/organizations/:orgId/users', usersRouter)
 app.use(errorHandler())
 
 async function start() {
-  await seedSupremeAdmin()
+  try {
+    await seedSupremeAdmin()
+  } catch (err) {
+    console.error('⚠ Supreme admin seed failed (SuperTokens may be down):', err.message)
+  }
 
   app.listen(PORT, () => {
     console.log(`✓ API running on http://localhost:${PORT}`)

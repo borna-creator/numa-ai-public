@@ -1,7 +1,20 @@
 # Production deployment on GoDaddy VPS
 # Domain: numa-iq.com | App path: /var/www/numaiq
 
-## Overview
+## ⚠ Critical: two separate databases
+
+SuperTokens and the app **must not share one PostgreSQL database**.  
+Never run `prisma db push` against a DB that SuperTokens uses — it will drop auth tables.
+
+| Database | Used by |
+|----------|---------|
+| `numaiq` | Prisma (organizations, users, etc.) |
+| `supertokens` | SuperTokens core only |
+
+`DATABASE_URL` → `.../numaiq`  
+SuperTokens docker env → `.../supertokens`
+
+---
 
 | Component | How it runs |
 |-----------|-------------|
