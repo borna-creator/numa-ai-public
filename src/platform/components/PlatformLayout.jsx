@@ -1,6 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import { LogoWide } from '../../components/Logo.jsx'
+import { getUserDisplayName } from '../../../shared/userProfile.js'
 
 export default function PlatformLayout({ children, title }) {
   const { user, logout } = useAuth()
@@ -19,7 +20,15 @@ export default function PlatformLayout({ children, title }) {
             <LogoWide className="h-8 w-auto" />
           </Link>
           <div className="flex items-center gap-4">
-            <span className="text-sm text-slate-500 hidden sm:inline">{user?.email}</span>
+            <div className="text-right hidden sm:block">
+              <p className="text-sm font-medium text-slate-700">{getUserDisplayName(user)}</p>
+              {user?.jobTitle && (
+                <p className="text-xs text-slate-500">{user.jobTitle}</p>
+              )}
+              {!user?.fullName && user?.email && (
+                <p className="text-xs text-slate-500">{user.email}</p>
+              )}
+            </div>
             <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-numa-50 text-numa-700">
               {user?.role?.replace('_', ' ')}
             </span>

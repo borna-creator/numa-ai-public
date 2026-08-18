@@ -44,7 +44,7 @@ router.use(requireSession, loadAppUser, requireOrgContext)
 const callInclude = {
   scorecard: { select: { id: true, name: true } },
   department: { select: { id: true, name: true } },
-  uploadedBy: { select: { id: true, email: true } },
+  uploadedBy: { select: { id: true, email: true, fullName: true, jobTitle: true } },
 }
 
 function callVisibilityFilter(req) {

@@ -21,6 +21,8 @@ export default function UserManagementTab() {
   const [createForm, setCreateForm] = useState({
     name: '',
     slug: '',
+    adminFullName: '',
+    adminJobTitle: '',
     adminEmail: '',
     adminPassword: '',
   })
@@ -64,7 +66,14 @@ export default function UserManagementTab() {
         method: 'POST',
         body: JSON.stringify(createForm),
       })
-      setCreateForm({ name: '', slug: '', adminEmail: '', adminPassword: '' })
+      setCreateForm({
+        name: '',
+        slug: '',
+        adminFullName: '',
+        adminJobTitle: '',
+        adminEmail: '',
+        adminPassword: '',
+      })
       setShowCreateForm(false)
       await loadOrganizations()
       setSearchParams({ org: organization.id })
@@ -177,6 +186,20 @@ export default function UserManagementTab() {
               placeholder="Slug (optional)"
               value={createForm.slug}
               onChange={(e) => setCreateForm({ ...createForm, slug: e.target.value })}
+              className="px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-numa-500/30"
+            />
+            <input
+              placeholder="Org admin full name"
+              required
+              value={createForm.adminFullName}
+              onChange={(e) => setCreateForm({ ...createForm, adminFullName: e.target.value })}
+              className="px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-numa-500/30"
+            />
+            <input
+              placeholder="Org admin role (e.g. Operations Manager)"
+              required
+              value={createForm.adminJobTitle}
+              onChange={(e) => setCreateForm({ ...createForm, adminJobTitle: e.target.value })}
               className="px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-numa-500/30"
             />
             <input

@@ -3,6 +3,10 @@ import { prisma } from '../db.js'
 import { requireSession, loadAppUser, requireOrgAdminOrSuper } from '../middleware/auth.js'
 import { requireOrgContext } from '../middleware/orgAccess.js'
 import {
+  parseOptionalUserProfile,
+  parseRequiredUserProfile,
+} from '../../shared/userProfile.js'
+import {
   createAuthUser,
   deleteAuthUser,
   updateAuthUserEmail,
@@ -21,7 +25,7 @@ router.get('/', requireOrgAdminOrSuper, async (req, res, next) => {
   try {
     const users = await prisma.user.findMany({
       where: { organizationId: req.organizationId, role: { in: manageableRoles(req) } },
-      orderBy: [{ role: 'asc' }, { email: 'asc' }],
+      orderBy: [{ role: 'asc' }, { fullName: 'asc' }, { email: 'asc' }],
       include: { department: { select: { id: true, name: true } } },
     })
 
@@ -33,13 +37,20 @@ router.get('/', requireOrgAdminOrSuper, async (req, res, next) => {
 
 router.post('/', requireOrgAdminOrSuper, async (req, res, next) => {
   try {
-    const { email, password, departmentId, role = 'USER' } = req.body
+    const { email, password, fullName, jobTitle, departmentId, role = 'USER' } = req.body
 
     if (!email?.trim() || !password?.trim()) {
       return res.status(400).json({ error: 'Email and password are required' })
     }
     if (password.length < 8) {
       return res.status(400).json({ error: 'Password must be at least 8 characters' })
+    }
+
+    let profile
+    try {
+      profile = parseRequiredUserProfile(fullName, jobTitle)
+    } catch (err) {
+      return res.status(400).json({ error: err.message })
     }
 
     const targetRole = role === 'ORG_ADMIN' ? 'ORG_ADMIN' : 'USER'
@@ -71,6 +82,7 @@ router.post('/', requireOrgAdminOrSuper, async (req, res, next) => {
       data: {
         email: normalizedEmail,
         superTokensUserId,
+        ...profile,
         role: targetRole,
         organizationId: req.organizationId,
         departmentId: targetRole === 'USER' ? departmentId : null,
@@ -86,7 +98,7 @@ router.post('/', requireOrgAdminOrSuper, async (req, res, next) => {
 
 router.patch('/:userId', requireOrgAdminOrSuper, async (req, res, next) => {
   try {
-    const { email, password, departmentId } = req.body
+    const { email, password, fullName, jobTitle, departmentId } = req.body
 
     const user = await prisma.user.findFirst({
       where: {
@@ -100,7 +112,19 @@ router.patch('/:userId', requireOrgAdminOrSuper, async (req, res, next) => {
       return res.status(404).json({ error: 'User not found' })
     }
 
-    if (!email?.trim() && !password?.trim() && departmentId === undefined) {
+    let profileData = {}
+    try {
+      profileData = parseOptionalUserProfile({ fullName, jobTitle })
+    } catch (err) {
+      return res.status(400).json({ error: err.message })
+    }
+
+    if (
+      !email?.trim() &&
+      !password?.trim() &&
+      departmentId === undefined &&
+      Object.keys(profileData).length === 0
+    ) {
       return res.status(400).json({ error: 'No fields to update' })
     }
 
@@ -134,7 +158,7 @@ router.patch('/:userId', requireOrgAdminOrSuper, async (req, res, next) => {
       await updateAuthUserPassword(user.superTokensUserId, password)
     }
 
-    const data = {}
+    const data = { ...profileData }
     if (normalizedEmail) data.email = normalizedEmail
     if (user.role === 'USER' && departmentId !== undefined) {
       data.departmentId = departmentId || null

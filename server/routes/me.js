@@ -4,11 +4,14 @@ import { requireSession, loadAppUser } from '../middleware/auth.js'
 const router = Router()
 
 router.get('/', requireSession, loadAppUser, (req, res) => {
-  const { id, email, role, organizationId, departmentId, organization, department } = req.appUser
+  const { id, email, fullName, jobTitle, role, organizationId, departmentId, organization, department } =
+    req.appUser
   res.json({
     user: {
       id,
       email,
+      fullName,
+      jobTitle,
       role,
       organizationId,
       departmentId,

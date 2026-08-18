@@ -1,6 +1,89 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../api.js'
 import { getOrgApiBase } from '../../orgApi.js'
+import { getUserDisplayName } from '../../../../shared/userProfile.js'
+
+const emptyUserForm = () => ({
+  fullName: '',
+  jobTitle: '',
+  email: '',
+  password: '',
+  departmentId: '',
+})
+
+const emptyAdminForm = () => ({
+  fullName: '',
+  jobTitle: '',
+  email: '',
+  password: '',
+})
+
+function UserIdentity({ user, showEmail = true }) {
+  return (
+    <div>
+      <span className="font-medium text-slate-900">{getUserDisplayName(user)}</span>
+      {user.jobTitle && (
+        <span className="ml-2 text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+          {user.jobTitle}
+        </span>
+      )}
+      {showEmail && user.fullName && (
+        <p className="text-xs text-slate-500 mt-0.5">{user.email}</p>
+      )}
+    </div>
+  )
+}
+
+function ProfileFields({ form, onChange, includeDepartment = false, departments = [] }) {
+  return (
+    <>
+      <input
+        placeholder="Full name"
+        required
+        value={form.fullName}
+        onChange={(e) => onChange({ ...form, fullName: e.target.value })}
+        className="px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-numa-500/30"
+      />
+      <input
+        placeholder="Role (e.g. Agent, Team Lead)"
+        required
+        value={form.jobTitle}
+        onChange={(e) => onChange({ ...form, jobTitle: e.target.value })}
+        className="px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-numa-500/30"
+      />
+      <input
+        type="email"
+        placeholder="Email"
+        required
+        value={form.email}
+        onChange={(e) => onChange({ ...form, email: e.target.value })}
+        className="px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-numa-500/30"
+      />
+      <input
+        type="password"
+        placeholder={form.passwordOptional ? 'New password (optional)' : 'Password (min 8 chars)'}
+        required={!form.passwordOptional}
+        minLength={form.passwordOptional ? undefined : 8}
+        value={form.password}
+        onChange={(e) => onChange({ ...form, password: e.target.value })}
+        className="px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-numa-500/30"
+      />
+      {includeDepartment && (
+        <select
+          required
+          value={form.departmentId}
+          onChange={(e) => onChange({ ...form, departmentId: e.target.value })}
+          className="sm:col-span-2 px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-numa-500/30"
+        >
+          <option value="">Select department</option>
+          {departments.map((d) => (
+            <option key={d.id} value={d.id}>{d.name}</option>
+          ))}
+        </select>
+      )}
+    </>
+  )
+}
 
 function ConfirmButton({ label, confirmMessage, onConfirm, className, disabled }) {
   return (
@@ -34,12 +117,12 @@ export default function OrgDashboardPage({
   const [departments, setDepartments] = useState([])
   const [users, setUsers] = useState([])
   const [deptName, setDeptName] = useState('')
-  const [userForm, setUserForm] = useState({ email: '', password: '', departmentId: '' })
+  const [userForm, setUserForm] = useState(emptyUserForm())
   const [orgForm, setOrgForm] = useState({ name: '', slug: '' })
   const [editingDept, setEditingDept] = useState(null)
   const [editingUser, setEditingUser] = useState(null)
-  const [editUserForm, setEditUserForm] = useState({ email: '', password: '', departmentId: '' })
-  const [adminForm, setAdminForm] = useState({ email: '', password: '' })
+  const [editUserForm, setEditUserForm] = useState({ ...emptyUserForm(), passwordOptional: true })
+  const [adminForm, setAdminForm] = useState(emptyAdminForm())
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
 
@@ -152,21 +235,28 @@ export default function OrgDashboardPage({
         method: 'POST',
         body: JSON.stringify(userForm),
       })
-      setUserForm({ email: '', password: '', departmentId: '' })
+      setUserForm(emptyUserForm())
     })
   }
 
   const startEditUser = (user) => {
     setEditingUser(user.id)
     setEditUserForm({
+      fullName: user.fullName || '',
+      jobTitle: user.jobTitle || '',
       email: user.email,
       password: '',
+      passwordOptional: true,
       departmentId: user.departmentId || '',
     })
   }
 
   const updateUser = (userId) => {
-    const body = { email: editUserForm.email.trim() }
+    const body = {
+      fullName: editUserForm.fullName.trim(),
+      jobTitle: editUserForm.jobTitle.trim(),
+      email: editUserForm.email.trim(),
+    }
     if (editUserForm.password.trim()) body.password = editUserForm.password
     if (editUserForm.departmentId) body.departmentId = editUserForm.departmentId
 
@@ -251,28 +341,12 @@ export default function OrgDashboardPage({
                     method: 'POST',
                     body: JSON.stringify({ ...adminForm, role: 'ORG_ADMIN' }),
                   })
-                  setAdminForm({ email: '', password: '' })
+                  setAdminForm(emptyAdminForm())
                 })
               }}
               className="grid sm:grid-cols-2 gap-3 mb-4"
             >
-              <input
-                type="email"
-                placeholder="Org admin email"
-                required
-                value={adminForm.email}
-                onChange={(e) => setAdminForm({ ...adminForm, email: e.target.value })}
-                className="px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
-              />
-              <input
-                type="password"
-                placeholder="Password (min 8 chars)"
-                required
-                minLength={8}
-                value={adminForm.password}
-                onChange={(e) => setAdminForm({ ...adminForm, password: e.target.value })}
-                className="px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
-              />
+              <ProfileFields form={adminForm} onChange={setAdminForm} />
               <button
                 type="submit"
                 className="sm:col-span-2 py-2.5 rounded-xl text-sm font-semibold text-white bg-numa-600 hover:bg-numa-700"
@@ -287,18 +361,9 @@ export default function OrgDashboardPage({
                 <li key={admin.id} className="px-4 py-3">
                   {editingUser === admin.id ? (
                     <div className="grid sm:grid-cols-2 gap-3">
-                      <input
-                        type="email"
-                        value={editUserForm.email}
-                        onChange={(e) => setEditUserForm({ ...editUserForm, email: e.target.value })}
-                        className="px-3 py-2 rounded-lg border border-slate-200 text-sm"
-                      />
-                      <input
-                        type="password"
-                        placeholder="New password (optional)"
-                        value={editUserForm.password}
-                        onChange={(e) => setEditUserForm({ ...editUserForm, password: e.target.value })}
-                        className="px-3 py-2 rounded-lg border border-slate-200 text-sm"
+                      <ProfileFields
+                        form={editUserForm}
+                        onChange={setEditUserForm}
                       />
                       <div className="sm:col-span-2 flex gap-2">
                         <button
@@ -319,7 +384,7 @@ export default function OrgDashboardPage({
                     </div>
                   ) : (
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-sm">
-                      <span className="font-medium text-slate-900">{admin.email}</span>
+                      <UserIdentity user={admin} />
                       <div className="flex gap-2">
                         <button
                           type="button"
@@ -426,34 +491,12 @@ export default function OrgDashboardPage({
       <section className={sectionClass}>
         <h2 className="text-lg font-semibold text-slate-900 mb-4">Users</h2>
         <form onSubmit={createUser} className="grid sm:grid-cols-2 gap-3 mb-4">
-          <input
-            type="email"
-            placeholder="Email"
-            required
-            value={userForm.email}
-            onChange={(e) => setUserForm({ ...userForm, email: e.target.value })}
-            className="px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-numa-500/30"
+          <ProfileFields
+            form={userForm}
+            onChange={setUserForm}
+            includeDepartment
+            departments={departments}
           />
-          <input
-            type="password"
-            placeholder="Password (min 8 chars)"
-            required
-            minLength={8}
-            value={userForm.password}
-            onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
-            className="px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-numa-500/30"
-          />
-          <select
-            required
-            value={userForm.departmentId}
-            onChange={(e) => setUserForm({ ...userForm, departmentId: e.target.value })}
-            className="sm:col-span-2 px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-numa-500/30"
-          >
-            <option value="">Select department</option>
-            {departments.map((d) => (
-              <option key={d.id} value={d.id}>{d.name}</option>
-            ))}
-          </select>
           <button
             type="submit"
             disabled={departments.length === 0}
@@ -470,29 +513,12 @@ export default function OrgDashboardPage({
               <li key={u.id} className="px-4 py-3">
                 {editingUser === u.id ? (
                   <div className="grid sm:grid-cols-2 gap-3">
-                    <input
-                      type="email"
-                      value={editUserForm.email}
-                      onChange={(e) => setEditUserForm({ ...editUserForm, email: e.target.value })}
-                      className="px-3 py-2 rounded-lg border border-slate-200 text-sm"
+                    <ProfileFields
+                      form={editUserForm}
+                      onChange={setEditUserForm}
+                      includeDepartment
+                      departments={departments}
                     />
-                    <input
-                      type="password"
-                      placeholder="New password (optional)"
-                      value={editUserForm.password}
-                      onChange={(e) => setEditUserForm({ ...editUserForm, password: e.target.value })}
-                      className="px-3 py-2 rounded-lg border border-slate-200 text-sm"
-                    />
-                    <select
-                      value={editUserForm.departmentId}
-                      onChange={(e) => setEditUserForm({ ...editUserForm, departmentId: e.target.value })}
-                      className="sm:col-span-2 px-3 py-2 rounded-lg border border-slate-200 text-sm"
-                    >
-                      <option value="">No department</option>
-                      {departments.map((d) => (
-                        <option key={d.id} value={d.id}>{d.name}</option>
-                      ))}
-                    </select>
                     <div className="sm:col-span-2 flex gap-2">
                       <button
                         type="button"
@@ -513,8 +539,8 @@ export default function OrgDashboardPage({
                 ) : (
                   <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 text-sm">
                     <div>
-                      <span className="font-medium text-slate-900">{u.email}</span>
-                      <span className="text-slate-500 ml-2">{u.department?.name || '—'}</span>
+                      <UserIdentity user={u} />
+                      <span className="text-slate-500 text-xs mt-1 block">{u.department?.name || '—'}</span>
                     </div>
                     <div className="flex gap-2">
                       <button

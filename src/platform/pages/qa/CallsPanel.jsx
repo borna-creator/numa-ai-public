@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api, formatFileSize, uploadFile, formatDateTime } from '../../api.js'
 import { CallStatusBadge } from '../../components/CallStatusBadge.jsx'
-import { getCriterionQuestionTypeLabel } from '../../../../shared/criterionQuestionTypes.js'
+import { getUserDisplayName } from '../../../../shared/userProfile.js'
 
 export default function CallsPanel({
   apiBase,
@@ -209,7 +209,12 @@ export default function CallsPanel({
               <dl className="grid grid-cols-2 gap-3 text-sm">
                 <div>
                   <dt className="text-slate-500">Uploaded by</dt>
-                  <dd className="font-medium text-slate-900">{selectedCall.uploadedBy.email}</dd>
+                  <dd className="font-medium text-slate-900">
+                    {getUserDisplayName(selectedCall.uploadedBy)}
+                    {selectedCall.uploadedBy.jobTitle && (
+                      <span className="text-slate-500 font-normal"> · {selectedCall.uploadedBy.jobTitle}</span>
+                    )}
+                  </dd>
                 </div>
                 <div>
                   <dt className="text-slate-500">Size</dt>

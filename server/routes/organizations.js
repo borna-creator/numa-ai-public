@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { prisma } from '../db.js'
 import { requireSession, loadAppUser, requireSuperAdmin } from '../middleware/auth.js'
 import { createAuthUser, slugify, deleteAuthUser } from '../services/users.js'
+import { parseRequiredUserProfile } from '../../shared/userProfile.js'
 
 const router = Router()
 
@@ -15,7 +16,7 @@ router.get('/', async (_req, res, next) => {
         _count: { select: { departments: true, users: true } },
         users: {
           where: { role: 'ORG_ADMIN' },
-          select: { id: true, email: true, createdAt: true },
+          select: { id: true, email: true, fullName: true, jobTitle: true, createdAt: true },
         },
       },
     })
@@ -27,7 +28,7 @@ router.get('/', async (_req, res, next) => {
 
 router.post('/', async (req, res, next) => {
   try {
-    const { name, slug, adminEmail, adminPassword } = req.body
+    const { name, slug, adminEmail, adminPassword, adminFullName, adminJobTitle } = req.body
 
     if (!name?.trim()) {
       return res.status(400).json({ error: 'Organization name is required' })
@@ -37,6 +38,13 @@ router.post('/', async (req, res, next) => {
     }
     if (adminPassword.length < 8) {
       return res.status(400).json({ error: 'Password must be at least 8 characters' })
+    }
+
+    let adminProfile
+    try {
+      adminProfile = parseRequiredUserProfile(adminFullName, adminJobTitle)
+    } catch (err) {
+      return res.status(400).json({ error: err.message })
     }
 
     const orgSlug = slug?.trim() || slugify(name)
@@ -61,6 +69,7 @@ router.post('/', async (req, res, next) => {
         data: {
           email: adminEmail.trim().toLowerCase(),
           superTokensUserId,
+          ...adminProfile,
           role: 'ORG_ADMIN',
           organizationId: org.id,
         },
@@ -72,7 +81,10 @@ router.post('/', async (req, res, next) => {
     const result = await prisma.organization.findUnique({
       where: { id: organization.id },
       include: {
-        users: { where: { role: 'ORG_ADMIN' }, select: { id: true, email: true, createdAt: true } },
+        users: {
+          where: { role: 'ORG_ADMIN' },
+          select: { id: true, email: true, fullName: true, jobTitle: true, createdAt: true },
+        },
         _count: { select: { departments: true, users: true } },
       },
     })
@@ -144,7 +156,10 @@ router.patch('/:orgId', async (req, res, next) => {
       where: { id: organization.id },
       data,
       include: {
-        users: { where: { role: 'ORG_ADMIN' }, select: { id: true, email: true, createdAt: true } },
+        users: {
+          where: { role: 'ORG_ADMIN' },
+          select: { id: true, email: true, fullName: true, jobTitle: true, createdAt: true },
+        },
         _count: { select: { departments: true, users: true } },
       },
     })
