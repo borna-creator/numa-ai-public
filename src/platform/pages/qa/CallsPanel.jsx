@@ -7,10 +7,30 @@ import { getCriterionQuestionTypeLabel } from '../../../../shared/criterionQuest
 function getTranscriptMeta(transcript) {
   const segments = transcript?.segments
   if (!segments || Array.isArray(segments)) return null
+
+  const rawSentiment = segments.sentiment
+  let sentiment = null
+  let sentimentScore = null
+
+  if (rawSentiment && typeof rawSentiment === 'object') {
+    if (typeof rawSentiment.average === 'string') {
+      sentiment = rawSentiment.average
+      sentimentScore = rawSentiment.sentiment_score ?? null
+    } else if (rawSentiment.average && typeof rawSentiment.average === 'object') {
+      sentiment = rawSentiment.average.sentiment ?? null
+      sentimentScore = rawSentiment.average.sentiment_score ?? null
+    } else if (typeof rawSentiment.sentiment === 'string') {
+      sentiment = rawSentiment.sentiment
+      sentimentScore = rawSentiment.sentiment_score ?? null
+    }
+  } else if (typeof rawSentiment === 'string') {
+    sentiment = rawSentiment
+  }
+
   return {
     summary: segments.summary ?? null,
-    sentiment: segments.sentiment?.average ?? null,
-    sentimentScore: segments.sentiment?.sentiment_score ?? null,
+    sentiment,
+    sentimentScore,
     speakerCount: Array.isArray(segments.speakers) ? segments.speakers.length : 0,
   }
 }
