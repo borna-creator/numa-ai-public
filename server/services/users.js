@@ -2,21 +2,7 @@ import EmailPassword from 'supertokens-node/recipe/emailpassword/index.js'
 import supertokens, { deleteUser as deleteSuperTokensUser } from 'supertokens-node'
 import { prisma } from '../db.js'
 
-async function resolveExistingAuthUserId(email, password) {
-  const signIn = await EmailPassword.signIn('public', email, password)
-  if (signIn.status === 'OK') {
-    return signIn.user.id
-  }
-
-  if (signIn.status === 'WRONG_CREDENTIALS_ERROR') {
-    throw new Error(
-      `Auth account exists for ${email} but the password does not match. Update SUPER_ADMIN_PASSWORD in .env to match the existing login.`,
-    )
-  }
-
-  throw new Error(`Could not resolve existing auth user (${signIn.status})`)
-}
-
+/** Create a new auth login for org admins / users. Reuses auth only if the password matches. */
 export async function createAuthUser(email, password) {
   const response = await EmailPassword.signUp('public', email, password)
 
@@ -25,7 +11,41 @@ export async function createAuthUser(email, password) {
   }
 
   if (response.status === 'EMAIL_ALREADY_EXISTS_ERROR') {
-    return resolveExistingAuthUserId(email, password)
+    const signIn = await EmailPassword.signIn('public', email, password)
+    if (signIn.status === 'OK') {
+      // Auth account from a previous test — reuse when the password matches.
+      return signIn.user.id
+    }
+
+    const err = new Error(
+      `The email ${email} is already registered with a different password. Use a different email, or enter the password that was used when that login was first created.`,
+    )
+    err.code = 'AUTH_EMAIL_EXISTS'
+    throw err
+  }
+
+  throw new Error(`SuperTokens signUp failed: ${response.status}`)
+}
+
+/** Seed-only helper — links env credentials to an existing SuperTokens login if needed. */
+async function ensureSeedAuthUser(email, password) {
+  const response = await EmailPassword.signUp('public', email, password)
+
+  if (response.status === 'OK') {
+    return response.user.id
+  }
+
+  if (response.status === 'EMAIL_ALREADY_EXISTS_ERROR') {
+    const signIn = await EmailPassword.signIn('public', email, password)
+    if (signIn.status === 'OK') {
+      return signIn.user.id
+    }
+    if (signIn.status === 'WRONG_CREDENTIALS_ERROR') {
+      throw new Error(
+        `Auth account exists for ${email} but SUPER_ADMIN_PASSWORD in .env does not match. Update .env or reset the SuperTokens database.`,
+      )
+    }
+    throw new Error(`Could not resolve seed auth user (${signIn.status})`)
   }
 
   throw new Error(`SuperTokens signUp failed: ${response.status}`)
@@ -83,7 +103,7 @@ export async function seedSupremeAdmin({ force = false } = {}) {
     return
   }
 
-  const superTokensUserId = await createAuthUser(email, password)
+  const superTokensUserId = await ensureSeedAuthUser(email, password)
 
   const profileDefaults = {
     superTokensUserId,
@@ -139,11 +159,16 @@ export function slugify(name) {
 }
 
 export function isAuthProvisioningError(err) {
+  if (err?.code === 'AUTH_EMAIL_EXISTS') {
+    return true
+  }
+
   const message = err?.message || ''
   return (
-    message.includes('Auth account exists') ||
+    message.includes('SUPER_ADMIN_PASSWORD') ||
+    message.includes('already registered') ||
     message.includes('SuperTokens signUp failed') ||
-    message.includes('Could not resolve existing auth user') ||
+    message.includes('Could not resolve seed auth user') ||
     message.includes('Initialisation not done') ||
     message.includes('AccountLinking')
   )
