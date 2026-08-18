@@ -2,20 +2,33 @@ import EmailPassword from 'supertokens-node/recipe/emailpassword/index.js'
 import supertokens, { deleteUser as deleteSuperTokensUser } from 'supertokens-node'
 import { prisma } from '../db.js'
 
+async function resolveExistingAuthUserId(email, password) {
+  const signIn = await EmailPassword.signIn('public', email, password)
+  if (signIn.status === 'OK') {
+    return signIn.user.id
+  }
+
+  if (signIn.status === 'WRONG_CREDENTIALS_ERROR') {
+    throw new Error(
+      `Auth account exists for ${email} but the password does not match. Update SUPER_ADMIN_PASSWORD in .env to match the existing login.`,
+    )
+  }
+
+  throw new Error(`Could not resolve existing auth user (${signIn.status})`)
+}
+
 export async function createAuthUser(email, password) {
   const response = await EmailPassword.signUp('public', email, password)
 
+  if (response.status === 'OK') {
+    return response.user.id
+  }
+
   if (response.status === 'EMAIL_ALREADY_EXISTS_ERROR') {
-    const existing = await EmailPassword.getUserByEmail('public', email)
-    if (!existing) throw new Error('Email already exists but user not found')
-    return existing.id
+    return resolveExistingAuthUserId(email, password)
   }
 
-  if (response.status !== 'OK') {
-    throw new Error(`SuperTokens signUp failed: ${response.status}`)
-  }
-
-  return response.user.id
+  throw new Error(`SuperTokens signUp failed: ${response.status}`)
 }
 
 function getEmailPasswordLoginMethod(superTokensUserId) {
