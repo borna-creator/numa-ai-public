@@ -1,5 +1,5 @@
-import { useAuth } from '../context/AuthContext.jsx'
-import CallsPanel from './qa/CallsPanel.jsx'
+import { useAuth } from '../../context/AuthContext.jsx'
+import CallsPanel from './CallsPanel.jsx'
 
 export default function UserQaPage() {
   const { user } = useAuth()
