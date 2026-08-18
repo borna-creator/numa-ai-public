@@ -13,7 +13,8 @@ export function formatTranscriptTimestamp(seconds) {
   return `${mins}:${String(secs).padStart(2, '0')}`
 }
 
-export function formatSpeakerLabel(speaker) {
+export function formatSpeakerLabel(speaker, role) {
+  if (role) return role
   if (!speaker) return 'Speaker'
   const id = String(speaker).toLowerCase()
   if (id === 'agent') return 'Agent'
@@ -25,11 +26,23 @@ export function formatSpeakerLabel(speaker) {
     .replace(/\b\w/g, (char) => char.toUpperCase())
 }
 
-function normalizeTurn(raw) {
+function getSpeakerRoleMap(transcript) {
+  const segments = transcript?.segments
+  if (!segments) return {}
+
+  if (Array.isArray(segments)) {
+    return transcript?.segmentsMeta?.speakerRoles ?? {}
+  }
+
+  return segments.speakerRoles ?? {}
+}
+
+function normalizeTurn(raw, roleMap) {
   const speakerKey = String(raw.speaker ?? 'unknown')
+  const role = raw.role ?? roleMap[speakerKey] ?? null
   return {
     speakerKey,
-    label: formatSpeakerLabel(raw.speaker),
+    label: formatSpeakerLabel(raw.speaker, role),
     startSec: raw.startSec ?? raw.start ?? 0,
     endSec: raw.endSec ?? raw.end ?? null,
     text: (raw.text ?? raw.transcript ?? '').trim(),
@@ -40,6 +53,7 @@ export function getSpeakerTurns(transcript) {
   if (!transcript) return []
 
   const segments = transcript.segments
+  const roleMap = getSpeakerRoleMap(transcript)
   let raw = []
 
   if (segments && typeof segments === 'object' && !Array.isArray(segments)) {
@@ -48,6 +62,7 @@ export function getSpeakerTurns(transcript) {
     } else if (Array.isArray(segments.utterances) && segments.utterances.length > 0) {
       raw = segments.utterances.map((u) => ({
         speaker: u.speaker,
+        role: roleMap[u.speaker] ?? u.role ?? null,
         startSec: u.start,
         endSec: u.end,
         text: u.transcript,
@@ -58,7 +73,7 @@ export function getSpeakerTurns(transcript) {
   }
 
   return raw
-    .map(normalizeTurn)
+    .map((item) => normalizeTurn(item, roleMap))
     .filter((turn) => turn.text)
     .sort((a, b) => a.startSec - b.startSec)
 }
@@ -91,11 +106,14 @@ export default function CallTranscript({ transcript }) {
   }
 
   const speakerStyles = buildSpeakerStyles(turns)
-  const legend = [...speakerStyles.entries()].map(([speakerKey, style]) => ({
-    speakerKey,
-    label: formatSpeakerLabel(speakerKey),
-    style,
-  }))
+  const legend = [...speakerStyles.entries()].map(([speakerKey, style]) => {
+    const turn = turns.find((item) => item.speakerKey === speakerKey)
+    return {
+      speakerKey,
+      label: turn?.label ?? formatSpeakerLabel(speakerKey),
+      style,
+    }
+  })
 
   return (
     <div>
