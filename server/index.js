@@ -6,6 +6,7 @@ import supertokens, { Error as SuperTokensError } from 'supertokens-node'
 import { middleware, errorHandler } from 'supertokens-node/framework/express/index.js'
 import { initSuperTokens } from './supertokens.js'
 import { seedSupremeAdmin } from './services/users.js'
+import internalRouter from './routes/internal.js'
 import meRouter from './routes/me.js'
 import organizationsRouter from './routes/organizations.js'
 import departmentsRouter from './routes/departments.js'
@@ -70,6 +71,7 @@ app.get('/health', (_req, res) => {
 })
 
 app.use('/api/me', meRouter)
+app.use('/api/internal', internalRouter)
 app.use('/api/organizations/:orgId/departments', departmentsRouter)
 app.use('/api/organizations/:orgId/users', usersRouter)
 app.use('/api/organizations/:orgId/scorecards', scorecardsRouter)

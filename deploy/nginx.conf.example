@@ -19,6 +19,9 @@ server {
     gzip_types text/plain text/css application/json application/javascript text/xml application/xml image/svg+xml;
     gzip_min_length 256;
 
+    # Call audio uploads (default nginx limit is 1MB)
+    client_max_body_size 100M;
+
     # SuperTokens auth + API (Node on port 3001)
     location /auth {
         proxy_pass http://127.0.0.1:3001;

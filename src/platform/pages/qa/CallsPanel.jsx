@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { api, formatFileSize, uploadFile, formatDateTime } from '../../api.js'
 import { CallStatusBadge } from '../../components/CallStatusBadge.jsx'
 import { getUserDisplayName } from '../../../../shared/userProfile.js'
+import { getCriterionQuestionTypeLabel } from '../../../../shared/criterionQuestionTypes.js'
 
 export default function CallsPanel({
   apiBase,
@@ -14,6 +15,7 @@ export default function CallsPanel({
   const [departments, setDepartments] = useState([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
+  const [processing, setProcessing] = useState(false)
   const [error, setError] = useState('')
   const [selectedCallId, setSelectedCallId] = useState(null)
   const [selectedCall, setSelectedCall] = useState(null)
@@ -43,6 +45,17 @@ export default function CallsPanel({
     }
   }
 
+  const refreshSelectedCall = useCallback(async () => {
+    if (!selectedCallId) return
+    try {
+      const data = await api(`${apiBase}/calls/${selectedCallId}`)
+      setSelectedCall(data.call)
+      setCalls((prev) => prev.map((c) => (c.id === data.call.id ? { ...c, ...data.call } : c)))
+    } catch (err) {
+      setError(err.message)
+    }
+  }, [apiBase, selectedCallId])
+
   useEffect(() => {
     load()
   }, [apiBase])
@@ -53,10 +66,15 @@ export default function CallsPanel({
       return
     }
 
-    api(`${apiBase}/calls/${selectedCallId}`)
-      .then((data) => setSelectedCall(data.call))
-      .catch((err) => setError(err.message))
-  }, [apiBase, selectedCallId])
+    refreshSelectedCall()
+  }, [apiBase, selectedCallId, refreshSelectedCall])
+
+  useEffect(() => {
+    if (!selectedCall || selectedCall.status !== 'PROCESSING') return undefined
+
+    const interval = setInterval(refreshSelectedCall, 4000)
+    return () => clearInterval(interval)
+  }, [selectedCall?.status, selectedCall?.id, refreshSelectedCall])
 
   const handleUpload = async (e) => {
     e.preventDefault()
@@ -74,14 +92,30 @@ export default function CallsPanel({
       if (uploadForm.scorecardId) formData.append('scorecardId', uploadForm.scorecardId)
       if (uploadForm.departmentId) formData.append('departmentId', uploadForm.departmentId)
 
-      await uploadFile(`${apiBase}/calls`, formData)
+      const { call } = await uploadFile(`${apiBase}/calls`, formData)
       setUploadForm({ scorecardId: '', departmentId: userDepartmentId || '', file: null })
       e.target.reset()
       await load()
+      setSelectedCallId(call.id)
     } catch (err) {
       setError(err.message)
     } finally {
       setUploading(false)
+    }
+  }
+
+  const handleProcess = async () => {
+    if (!selectedCall) return
+    setProcessing(true)
+    setError('')
+    try {
+      const data = await api(`${apiBase}/calls/${selectedCall.id}/process`, { method: 'POST' })
+      setSelectedCall(data.call)
+      await load()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setProcessing(false)
     }
   }
 
@@ -102,6 +136,10 @@ export default function CallsPanel({
   }
 
   const audioSrc = selectedCall ? `${apiBase}/calls/${selectedCall.id}/audio` : null
+  const canProcess =
+    selectedCall &&
+    selectedCall.scorecardId &&
+    ['PENDING', 'FAILED', 'COMPLETED'].includes(selectedCall.status)
 
   return (
     <div className="space-y-6">
@@ -112,7 +150,7 @@ export default function CallsPanel({
       <form onSubmit={handleUpload} className="rounded-2xl border border-slate-200/80 bg-white p-6 space-y-4">
         <h3 className="text-lg font-semibold text-slate-900">Upload call</h3>
         <p className="text-sm text-slate-500">
-          MP3, WAV, M4A, OGG, or WEBM — stored on this server. Scoring runs in a later phase.
+          MP3, WAV, M4A, OGG, or WEBM. Select a scorecard to score automatically after upload.
         </p>
         <div className="grid sm:grid-cols-2 gap-4">
           <select
@@ -182,6 +220,7 @@ export default function CallsPanel({
                         <p className="text-xs text-slate-500 mt-1">
                           {call.scorecard?.name || 'No scorecard'}
                           {call.department?.name ? ` · ${call.department.name}` : ''}
+                          {call.overallScore != null ? ` · Score ${call.overallScore}%` : ''}
                         </p>
                       </div>
                       <CallStatusBadge status={call.status} />
@@ -205,6 +244,25 @@ export default function CallsPanel({
                 </div>
                 <CallStatusBadge status={selectedCall.status} />
               </div>
+
+              {selectedCall.overallScore != null && (
+                <div className="rounded-xl bg-numa-50 border border-numa-100 px-4 py-3">
+                  <p className="text-xs font-semibold text-numa-700 uppercase tracking-wide">Overall score</p>
+                  <p className="text-3xl font-bold text-numa-900 mt-1">{selectedCall.overallScore}%</p>
+                </div>
+              )}
+
+              {selectedCall.status === 'FAILED' && selectedCall.errorMessage && (
+                <div className="rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-sm text-red-700">
+                  {selectedCall.errorMessage}
+                </div>
+              )}
+
+              {selectedCall.status === 'PROCESSING' && (
+                <p className="text-sm text-blue-700 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
+                  Scoring in progress… this page refreshes automatically.
+                </p>
+              )}
 
               <dl className="grid grid-cols-2 gap-3 text-sm">
                 <div>
@@ -230,7 +288,42 @@ export default function CallsPanel({
                 </div>
               </dl>
 
-              {selectedCall.scorecard?.criteria?.length > 0 && (
+              {selectedCall.results?.length > 0 && (
+                <div>
+                  <p className="text-sm font-medium text-slate-900 mb-2">Criterion scores</p>
+                  <ul className="space-y-2">
+                    {selectedCall.results.map((r) => (
+                      <li key={r.id} className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm">
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="font-medium text-slate-900">{r.criterion.label}</span>
+                          <span
+                            className={`shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full ${
+                              r.passed ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
+                            }`}
+                          >
+                            {r.value}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 mt-1">
+                          {getCriterionQuestionTypeLabel(r.criterion.questionType)}
+                        </p>
+                        {r.reasoning && <p className="text-slate-600 mt-2 text-xs leading-relaxed">{r.reasoning}</p>}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {selectedCall.transcript?.fullText && (
+                <div>
+                  <p className="text-sm font-medium text-slate-900 mb-2">Transcript</p>
+                  <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm text-slate-700 whitespace-pre-wrap max-h-48 overflow-y-auto">
+                    {selectedCall.transcript.fullText}
+                  </div>
+                </div>
+              )}
+
+              {selectedCall.scorecard?.criteria?.length > 0 && !selectedCall.results?.length && (
                 <div>
                   <p className="text-sm font-medium text-slate-900 mb-2">Scorecard criteria</p>
                   <ul className="text-sm text-slate-600 space-y-1">
@@ -250,15 +343,31 @@ export default function CallsPanel({
                 Your browser does not support audio playback.
               </audio>
 
-              {(canDeleteAny || selectedCall.uploadedBy.id === currentUserId) && (
-                <button
-                  type="button"
-                  onClick={() => handleDelete(selectedCall)}
-                  className="text-sm font-semibold text-red-600 hover:text-red-700"
-                >
-                  Delete call
-                </button>
-              )}
+              <div className="flex flex-wrap gap-3">
+                {canProcess && (
+                  <button
+                    type="button"
+                    onClick={handleProcess}
+                    disabled={processing}
+                    className="px-4 py-2 rounded-xl text-sm font-semibold text-white bg-numa-600 hover:bg-numa-700 disabled:opacity-60"
+                  >
+                    {processing
+                      ? 'Starting…'
+                      : selectedCall.status === 'COMPLETED'
+                        ? 'Re-score call'
+                        : 'Start scoring'}
+                  </button>
+                )}
+                {(canDeleteAny || selectedCall.uploadedBy.id === currentUserId) && (
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(selectedCall)}
+                    className="text-sm font-semibold text-red-600 hover:text-red-700"
+                  >
+                    Delete call
+                  </button>
+                )}
+              </div>
             </div>
           )}
         </section>

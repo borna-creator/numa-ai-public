@@ -150,11 +150,21 @@ curl http://127.0.0.1:3001/health
 
 ## One-time: update nginx
 
+The example config sets `client_max_body_size 100M` so call uploads (MP3, etc.) are not blocked by nginx’s default 1MB limit.
+
 ```bash
 sudo cp /var/www/numaiq/deploy/nginx.conf.example /etc/nginx/sites-available/numaiq
 sudo nginx -t
 sudo systemctl reload nginx
 ```
+
+If you already have a live nginx config, add this inside **both** the port 80 and port 443 `server { }` blocks (or only inside `location /api { }`):
+
+```nginx
+client_max_body_size 100M;
+```
+
+Then `sudo nginx -t && sudo systemctl reload nginx`.
 
 If HTTPS is not set up yet:
 

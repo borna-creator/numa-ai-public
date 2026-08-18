@@ -32,6 +32,13 @@ enum ScorecardLanguage {
   FRENCH
 }
 
+enum ProcessingJobStatus {
+  PENDING
+  DISPATCHED
+  COMPLETED
+  FAILED
+}
+
 model Organization {
   id          String       @id @default(cuid())
   name        String
@@ -103,6 +110,7 @@ model ScorecardCriterion {
   questionType CriterionQuestionType @default(YES_NO)
   weight       Int                   @default(1)
   sortOrder    Int                   @default(0)
+  results      CallCriterionResult[]
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -124,14 +132,61 @@ model Call {
   fileSize       Int
   storagePath    String
   durationSec    Int?
-  status         CallStatus   @default(PENDING)
+  status         CallStatus            @default(PENDING)
   errorMessage   String?
-  createdAt      DateTime     @default(now())
+  overallScore   Int?
+  transcript     CallTranscript?
+  results        CallCriterionResult[]
+  processingJob  ProcessingJob?
+  createdAt      DateTime              @default(now())
   updatedAt      DateTime     @updatedAt
 
   @@index([organizationId])
   @@index([departmentId])
   @@index([uploadedById])
   @@index([scorecardId])
+  @@index([status])
+}
+
+model CallTranscript {
+  id        String   @id @default(cuid())
+  callId    String   @unique
+  call      Call     @relation(fields: [callId], references: [id], onDelete: Cascade)
+  fullText  String   @db.Text
+  segments  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CallCriterionResult {
+  id          String             @id @default(cuid())
+  callId      String
+  call        Call               @relation(fields: [callId], references: [id], onDelete: Cascade)
+  criterionId String
+  criterion   ScorecardCriterion @relation(fields: [criterionId], references: [id], onDelete: Cascade)
+  value       String
+  passed      Boolean?
+  reasoning   String?            @db.Text
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@unique([callId, criterionId])
+  @@index([callId])
+}
+
+model ProcessingJob {
+  id             String              @id @default(cuid())
+  callId         String              @unique
+  call           Call                @relation(fields: [callId], references: [id], onDelete: Cascade)
+  organizationId String
+  status         ProcessingJobStatus @default(PENDING)
+  attempts       Int                 @default(0)
+  lastError      String?
+  dispatchedAt   DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  @@index([organizationId])
   @@index([status])
 }

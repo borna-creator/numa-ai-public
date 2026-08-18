@@ -9,6 +9,7 @@ import {
   createCallReadStream,
   getUploadTmpDir,
 } from '../services/storage.js'
+import { startCallProcessing } from '../services/workerDispatch.js'
 
 const router = Router({ mergeParams: true })
 
@@ -45,6 +46,12 @@ const callInclude = {
   scorecard: { select: { id: true, name: true } },
   department: { select: { id: true, name: true } },
   uploadedBy: { select: { id: true, email: true, fullName: true, jobTitle: true } },
+  transcript: true,
+  results: {
+    include: {
+      criterion: { select: { id: true, label: true, questionType: true, weight: true } },
+    },
+  },
 }
 
 function callVisibilityFilter(req) {
@@ -84,7 +91,17 @@ router.get('/:callId', async (req, res, next) => {
           select: {
             id: true,
             name: true,
+            language: true,
             criteria: { orderBy: { sortOrder: 'asc' } },
+          },
+        },
+        transcript: true,
+        results: {
+          orderBy: { criterion: { sortOrder: 'asc' } },
+          include: {
+            criterion: {
+              select: { id: true, label: true, questionType: true, weight: true, description: true },
+            },
           },
         },
       },
@@ -164,7 +181,63 @@ router.post('/', upload.single('audio'), async (req, res, next) => {
       include: callInclude,
     })
 
+    if (scorecardId) {
+      startCallProcessing(call.id).catch((err) => {
+        console.error(`Failed to start processing for call ${call.id}:`, err.message)
+      })
+    }
+
     res.status(201).json({ call: updated })
+  } catch (err) {
+    next(err)
+  }
+})
+
+router.post('/:callId/process', async (req, res, next) => {
+  try {
+    const call = await prisma.call.findFirst({
+      where: { id: req.params.callId, ...callVisibilityFilter(req) },
+    })
+
+    if (!call) {
+      return res.status(404).json({ error: 'Call not found' })
+    }
+
+    if (req.appUser.role === 'USER' && call.uploadedById !== req.appUser.id) {
+      return res.status(403).json({ error: 'Insufficient permissions' })
+    }
+
+    if (!call.scorecardId) {
+      return res.status(400).json({ error: 'Assign a scorecard before processing' })
+    }
+
+    await startCallProcessing(call.id)
+
+    const refreshed = await prisma.call.findFirst({
+      where: { id: call.id },
+      include: {
+        ...callInclude,
+        scorecard: {
+          select: {
+            id: true,
+            name: true,
+            language: true,
+            criteria: { orderBy: { sortOrder: 'asc' } },
+          },
+        },
+        transcript: true,
+        results: {
+          orderBy: { criterion: { sortOrder: 'asc' } },
+          include: {
+            criterion: {
+              select: { id: true, label: true, questionType: true, weight: true, description: true },
+            },
+          },
+        },
+      },
+    })
+
+    res.json({ call: refreshed })
   } catch (err) {
     next(err)
   }

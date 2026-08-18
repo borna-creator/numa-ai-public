@@ -81,6 +81,10 @@ Use the credentials from `SUPER_ADMIN_EMAIL` / `SUPER_ADMIN_PASSWORD` in `.env`.
 
 Call audio files are stored on disk under `CALL_STORAGE_PATH` (default `./storage/calls`). Upload accepts MP3, WAV, M4A, OGG, WEBM up to `CALL_MAX_UPLOAD_BYTES`.
 
+**Phase 2 (scoring pipeline):** See [PHASE-2.md](./PHASE-2.md). Upload with a scorecard to dispatch a job to the AI worker. Results include transcript, per-criterion scores, and overall %.
+
+| GET/POST | `/api/internal/...` | Worker only (signed token / shared secret) |
+
 SUPER_ADMIN can manage any organization via `:orgId` in nested routes. ORG_ADMIN is scoped to their own org. SUPER_ADMIN can also create, edit, and delete org admins via the users routes.
 
 Auth endpoints are handled by SuperTokens at `/auth/*`.
