@@ -1,7 +1,17 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../api.js'
+import {
+  CRITERION_QUESTION_TYPES,
+  DEFAULT_CRITERION_QUESTION_TYPE,
+  getCriterionQuestionTypeLabel,
+} from '../../../../shared/criterionQuestionTypes.js'
 
-const emptyCriterion = () => ({ label: '', description: '', weight: 1 })
+const emptyCriterion = () => ({
+  label: '',
+  description: '',
+  weight: 1,
+  questionType: DEFAULT_CRITERION_QUESTION_TYPE,
+})
 
 export default function ScorecardsPanel({ apiBase, canManage = false }) {
   const [scorecards, setScorecards] = useState([])
@@ -49,6 +59,7 @@ export default function ScorecardsPanel({ apiBase, canManage = false }) {
         label: c.label,
         description: c.description || '',
         weight: c.weight,
+        questionType: c.questionType || DEFAULT_CRITERION_QUESTION_TYPE,
       })),
     })
   }
@@ -175,13 +186,25 @@ export default function ScorecardsPanel({ apiBase, canManage = false }) {
                   required
                   value={criterion.label}
                   onChange={(e) => updateCriterion(index, 'label', e.target.value)}
-                  className="sm:col-span-4 px-3 py-2 rounded-lg border border-slate-200 text-sm"
+                  className="sm:col-span-3 px-3 py-2 rounded-lg border border-slate-200 text-sm"
                 />
+                <select
+                  value={criterion.questionType}
+                  onChange={(e) => updateCriterion(index, 'questionType', e.target.value)}
+                  className="sm:col-span-3 px-3 py-2 rounded-lg border border-slate-200 text-sm bg-white"
+                  title="Question type"
+                >
+                  {CRITERION_QUESTION_TYPES.map((type) => (
+                    <option key={type.value} value={type.value}>
+                      {type.label}
+                    </option>
+                  ))}
+                </select>
                 <input
                   placeholder="Description / guidance"
                   value={criterion.description}
                   onChange={(e) => updateCriterion(index, 'description', e.target.value)}
-                  className="sm:col-span-6 px-3 py-2 rounded-lg border border-slate-200 text-sm"
+                  className="sm:col-span-4 px-3 py-2 rounded-lg border border-slate-200 text-sm"
                 />
                 <input
                   type="number"
@@ -275,6 +298,9 @@ export default function ScorecardsPanel({ apiBase, canManage = false }) {
                 {scorecard.criteria.map((criterion) => (
                   <li key={criterion.id} className="px-4 py-3 text-sm">
                     <span className="font-medium text-slate-900">{criterion.label}</span>
+                    <span className="ml-2 text-xs font-medium px-2 py-0.5 rounded-full bg-numa-50 text-numa-700">
+                      {getCriterionQuestionTypeLabel(criterion.questionType)}
+                    </span>
                     {criterion.description && (
                       <span className="text-slate-500 ml-2">— {criterion.description}</span>
                     )}

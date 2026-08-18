@@ -2,6 +2,10 @@ import { Router } from 'express'
 import { prisma } from '../db.js'
 import { requireSession, loadAppUser, requireOrgAdminOrSuper } from '../middleware/auth.js'
 import { requireOrgContext } from '../middleware/orgAccess.js'
+import {
+  DEFAULT_CRITERION_QUESTION_TYPE,
+  isValidCriterionQuestionType,
+} from '../../shared/criterionQuestionTypes.js'
 
 const router = Router({ mergeParams: true })
 
@@ -25,9 +29,14 @@ function parseCriteria(raw) {
     if (!Number.isFinite(weight) || weight < 1) {
       throw new Error('Criterion weight must be at least 1')
     }
+    const questionType = item.questionType ?? DEFAULT_CRITERION_QUESTION_TYPE
+    if (!isValidCriterionQuestionType(questionType)) {
+      throw new Error('Invalid criterion question type')
+    }
     return {
       label: item.label.trim(),
       description: item.description?.trim() || null,
+      questionType,
       weight: Math.round(weight),
       sortOrder: index,
     }

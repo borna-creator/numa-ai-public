@@ -20,6 +20,12 @@ enum CallStatus {
   FAILED
 }
 
+enum CriterionQuestionType {
+  YES_NO
+  EXCELLENT_GOOD_POOR
+  CONVERSATIONAL
+}
+
 model Organization {
   id          String       @id @default(cuid())
   name        String
@@ -80,13 +86,14 @@ model Scorecard {
 }
 
 model ScorecardCriterion {
-  id          String    @id @default(cuid())
-  scorecardId String
-  scorecard   Scorecard @relation(fields: [scorecardId], references: [id], onDelete: Cascade)
-  label       String
-  description String?
-  weight      Int       @default(1)
-  sortOrder   Int       @default(0)
+  id           String                @id @default(cuid())
+  scorecardId  String
+  scorecard    Scorecard             @relation(fields: [scorecardId], references: [id], onDelete: Cascade)
+  label        String
+  description  String?
+  questionType CriterionQuestionType @default(YES_NO)
+  weight       Int                   @default(1)
+  sortOrder    Int                   @default(0)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 

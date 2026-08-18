@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api, formatFileSize, uploadFile, formatDateTime } from '../../api.js'
 import { CallStatusBadge } from '../../components/CallStatusBadge.jsx'
+import { getCriterionQuestionTypeLabel } from '../../../../shared/criterionQuestionTypes.js'
 
 export default function CallsPanel({
   apiBase,
@@ -229,7 +230,12 @@ export default function CallsPanel({
                   <p className="text-sm font-medium text-slate-900 mb-2">Scorecard criteria</p>
                   <ul className="text-sm text-slate-600 space-y-1">
                     {selectedCall.scorecard.criteria.map((c) => (
-                      <li key={c.id}>• {c.label}</li>
+                      <li key={c.id}>
+                        • {c.label}
+                        <span className="text-slate-400 ml-1">
+                          ({getCriterionQuestionTypeLabel(c.questionType)})
+                        </span>
+                      </li>
                     ))}
                   </ul>
                 </div>
