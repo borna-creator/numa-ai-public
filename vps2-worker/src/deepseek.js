@@ -1,4 +1,4 @@
-import { chatCompletionJson } from './deepinfra.js'
+import { chatCompletionJson, extractArrayField, formatMissingArrayError } from './deepinfra.js'
 
 const VALID_YES_NO = new Set(['YES', 'NO'])
 const VALID_EGP = new Set(['EXCELLENT', 'GOOD', 'POOR'])
@@ -25,6 +25,12 @@ function buildScoringPrompt(scorecard, transcriptText) {
     )
     .join('\n')
 
+  const maxTranscriptChars = 28000
+  const trimmedTranscript =
+    transcriptText.length > maxTranscriptChars
+      ? `${transcriptText.slice(0, maxTranscriptChars)}\n\n[Transcript truncated for scoring]`
+      : transcriptText
+
   return `You are a QA analyst scoring a phone call against a scorecard.
 
 Scorecard: ${scorecard.name}
@@ -35,22 +41,57 @@ ${criteriaBlock}
 
 Call transcript:
 """
-${transcriptText}
+${trimmedTranscript}
 """
 
-Return JSON only:
+Return a JSON object with a "results" array. Include exactly one result per criterion, in the same order as listed. Each result must use the exact criterionId from the list above.
+
+Example JSON shape:
 {
   "results": [
     {
       "criterionId": "<exact id from list>",
       "value": "<allowed answer for that criterion type>",
-      "passed": true or false,
+      "passed": true,
       "reasoning": "<brief evidence from the transcript>"
     }
   ]
+}`
 }
 
-Include exactly one result per criterion, in the same order as listed.`
+const SCORING_JSON_SCHEMA = {
+  name: 'qa_scores',
+  strict: true,
+  schema: {
+    type: 'object',
+    properties: {
+      results: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            criterionId: { type: 'string' },
+            value: { type: 'string' },
+            passed: { type: 'boolean' },
+            reasoning: { type: 'string' },
+          },
+          required: ['criterionId', 'value', 'passed', 'reasoning'],
+          additionalProperties: false,
+        },
+      },
+    },
+    required: ['results'],
+    additionalProperties: false,
+  },
+}
+
+function normalizeRawResult(raw, criterion) {
+  return {
+    criterionId: String(raw?.criterionId ?? raw?.criterion_id ?? raw?.id ?? criterion.id).trim(),
+    value: raw?.value,
+    passed: raw?.passed,
+    reasoning: raw?.reasoning ?? raw?.reason ?? raw?.explanation,
+  }
 }
 
 function normalizeResult(raw, criterion) {
@@ -87,22 +128,41 @@ function normalizeResult(raw, criterion) {
 }
 
 export async function scoreTranscript(scorecard, transcriptText) {
-  const parsed = await chatCompletionJson({
-    system: 'You score call center QA criteria from transcripts. Respond with valid JSON only.',
+  const request = {
+    system:
+      'You score call center QA criteria from transcripts. Respond with valid JSON only, using the required schema.',
     user: buildScoringPrompt(scorecard, transcriptText),
     temperature: 0.2,
-  })
-
-  const rawResults = parsed?.results
-  if (!Array.isArray(rawResults) || rawResults.length === 0) {
-    throw new Error('DeepInfra response missing results array')
+    maxTokens: 8192,
   }
 
-  const byId = new Map(rawResults.map((r) => [r.criterionId, r]))
+  let parsed
+  try {
+    parsed = await chatCompletionJson({ ...request, jsonSchema: SCORING_JSON_SCHEMA })
+  } catch (err) {
+    if (!String(err.message).includes('400')) throw err
+    console.warn('Scoring json_schema rejected, retrying with json_object:', err.message)
+    parsed = await chatCompletionJson(request)
+  }
+
+  const rawResults = extractArrayField(parsed, ['results', 'criteria', 'scores', 'criteriaResults'])
+  if (!rawResults) {
+    throw new Error(formatMissingArrayError('results', ['results'], parsed))
+  }
+
+  const byId = new Map(
+    rawResults.map((raw, index) => {
+      const criterion = scorecard.criteria[index]
+      const normalized = normalizeRawResult(raw, criterion)
+      return [normalized.criterionId, normalized]
+    })
+  )
 
   return scorecard.criteria.map((criterion) => {
-    const raw = byId.get(criterion.id) ?? rawResults[scorecard.criteria.indexOf(criterion)]
-    if (!raw) {
+    const raw =
+      byId.get(criterion.id) ??
+      normalizeRawResult(rawResults[scorecard.criteria.indexOf(criterion)], criterion)
+    if (!raw?.value) {
       throw new Error(`Missing score for criterion "${criterion.label}"`)
     }
     return normalizeResult(raw, criterion)

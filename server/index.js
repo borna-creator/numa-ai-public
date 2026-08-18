@@ -63,7 +63,8 @@ app.use(
   }),
 )
 
-app.use(express.json())
+app.use('/api/internal', express.json({ limit: '15mb' }))
+app.use(express.json({ limit: '1mb' }))
 app.use(middleware())
 
 app.get('/health', (_req, res) => {
@@ -89,6 +90,9 @@ app.use('/api/org', orgMemberRouter)
 app.use((err, req, res, next) => {
   if (req.path.startsWith('/auth') || SuperTokensError.isErrorFromSuperTokens(err)) {
     return next(err)
+  }
+  if (err?.type === 'entity.too.large') {
+    return res.status(413).json({ error: 'request entity too large' })
   }
   if (err instanceof multer.MulterError) {
     if (err.code === 'LIMIT_FILE_SIZE') {
