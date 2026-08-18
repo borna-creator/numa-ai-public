@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { prisma } from '../db.js'
 import { requireSession, loadAppUser, requireOrgAdminOrSuper } from '../middleware/auth.js'
+import { requireOrgContext } from '../middleware/orgAccess.js'
 import {
   createAuthUser,
   deleteAuthUser,
@@ -10,29 +11,16 @@ import {
 
 const router = Router({ mergeParams: true })
 
-router.use(requireSession, loadAppUser, requireOrgAdminOrSuper)
-
-function resolveOrgId(req) {
-  if (req.appUser.role === 'SUPER_ADMIN') {
-    return req.params.orgId
-  }
-  return req.appUser.organizationId
-}
+router.use(requireSession, loadAppUser, requireOrgContext)
 
 function manageableRoles(req) {
   return req.appUser.role === 'SUPER_ADMIN' ? ['USER', 'ORG_ADMIN'] : ['USER']
 }
 
-router.get('/', async (req, res, next) => {
+router.get('/', requireOrgAdminOrSuper, async (req, res, next) => {
   try {
-    const organizationId = resolveOrgId(req)
-
-    if (req.appUser.role === 'ORG_ADMIN' && req.appUser.organizationId !== organizationId) {
-      return res.status(403).json({ error: 'Cannot access another organization' })
-    }
-
     const users = await prisma.user.findMany({
-      where: { organizationId, role: { in: manageableRoles(req) } },
+      where: { organizationId: req.organizationId, role: { in: manageableRoles(req) } },
       orderBy: [{ role: 'asc' }, { email: 'asc' }],
       include: { department: { select: { id: true, name: true } } },
     })
@@ -43,9 +31,8 @@ router.get('/', async (req, res, next) => {
   }
 })
 
-router.post('/', async (req, res, next) => {
+router.post('/', requireOrgAdminOrSuper, async (req, res, next) => {
   try {
-    const organizationId = resolveOrgId(req)
     const { email, password, departmentId, role = 'USER' } = req.body
 
     if (!email?.trim() || !password?.trim()) {
@@ -63,13 +50,9 @@ router.post('/', async (req, res, next) => {
       return res.status(400).json({ error: 'Department is required' })
     }
 
-    if (req.appUser.role === 'ORG_ADMIN' && req.appUser.organizationId !== organizationId) {
-      return res.status(403).json({ error: 'Cannot modify another organization' })
-    }
-
     if (targetRole === 'USER') {
       const department = await prisma.department.findFirst({
-        where: { id: departmentId, organizationId },
+        where: { id: departmentId, organizationId: req.organizationId },
       })
       if (!department) {
         return res.status(400).json({ error: 'Invalid department for this organization' })
@@ -89,7 +72,7 @@ router.post('/', async (req, res, next) => {
         email: normalizedEmail,
         superTokensUserId,
         role: targetRole,
-        organizationId,
+        organizationId: req.organizationId,
         departmentId: targetRole === 'USER' ? departmentId : null,
       },
       include: { department: { select: { id: true, name: true } } },
@@ -101,17 +84,16 @@ router.post('/', async (req, res, next) => {
   }
 })
 
-router.patch('/:userId', async (req, res, next) => {
+router.patch('/:userId', requireOrgAdminOrSuper, async (req, res, next) => {
   try {
-    const organizationId = resolveOrgId(req)
     const { email, password, departmentId } = req.body
 
-    if (req.appUser.role === 'ORG_ADMIN' && req.appUser.organizationId !== organizationId) {
-      return res.status(403).json({ error: 'Cannot modify another organization' })
-    }
-
     const user = await prisma.user.findFirst({
-      where: { id: req.params.userId, organizationId, role: { in: manageableRoles(req) } },
+      where: {
+        id: req.params.userId,
+        organizationId: req.organizationId,
+        role: { in: manageableRoles(req) },
+      },
     })
 
     if (!user) {
@@ -128,7 +110,7 @@ router.patch('/:userId', async (req, res, next) => {
 
     if (user.role === 'USER' && departmentId) {
       const department = await prisma.department.findFirst({
-        where: { id: departmentId, organizationId },
+        where: { id: departmentId, organizationId: req.organizationId },
       })
       if (!department) {
         return res.status(400).json({ error: 'Invalid department for this organization' })
@@ -173,20 +155,18 @@ router.patch('/:userId', async (req, res, next) => {
   }
 })
 
-router.delete('/:userId', async (req, res, next) => {
+router.delete('/:userId', requireOrgAdminOrSuper, async (req, res, next) => {
   try {
-    const organizationId = resolveOrgId(req)
-
     const user = await prisma.user.findFirst({
-      where: { id: req.params.userId, organizationId, role: { in: manageableRoles(req) } },
+      where: {
+        id: req.params.userId,
+        organizationId: req.organizationId,
+        role: { in: manageableRoles(req) },
+      },
     })
 
     if (!user) {
       return res.status(404).json({ error: 'User not found' })
-    }
-
-    if (req.appUser.role === 'ORG_ADMIN' && req.appUser.organizationId !== organizationId) {
-      return res.status(403).json({ error: 'Cannot modify another organization' })
     }
 
     await deleteAuthUser(user.superTokensUserId)

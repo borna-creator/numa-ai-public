@@ -81,6 +81,7 @@ orgMemberRouter.use(requireSession, loadAppUser, attachMemberOrg)
 orgMemberRouter.use('/scorecards', scorecardsRouter)
 orgMemberRouter.use('/calls', callsRouter)
 orgMemberRouter.use('/departments', departmentsRouter)
+orgMemberRouter.use('/users', usersRouter)
 app.use('/api/org', orgMemberRouter)
 
 app.use((err, req, res, next) => {

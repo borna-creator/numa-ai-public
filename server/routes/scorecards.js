@@ -6,6 +6,10 @@ import {
   DEFAULT_CRITERION_QUESTION_TYPE,
   isValidCriterionQuestionType,
 } from '../../shared/criterionQuestionTypes.js'
+import {
+  DEFAULT_SCORECARD_LANGUAGE,
+  isValidScorecardLanguage,
+} from '../../shared/scorecardLanguages.js'
 
 const router = Router({ mergeParams: true })
 
@@ -58,10 +62,15 @@ router.get('/', async (req, res, next) => {
 
 router.post('/', requireOrgAdminOrSuper, async (req, res, next) => {
   try {
-    const { name, description, isActive = true, criteria } = req.body
+    const { name, description, language, isActive = true, criteria } = req.body
 
     if (!name?.trim()) {
       return res.status(400).json({ error: 'Scorecard name is required' })
+    }
+
+    const scorecardLanguage = language ?? DEFAULT_SCORECARD_LANGUAGE
+    if (!isValidScorecardLanguage(scorecardLanguage)) {
+      return res.status(400).json({ error: 'Invalid scorecard language' })
     }
 
     let parsedCriteria
@@ -79,6 +88,7 @@ router.post('/', requireOrgAdminOrSuper, async (req, res, next) => {
         organizationId: req.organizationId,
         name: name.trim(),
         description: description?.trim() || null,
+        language: scorecardLanguage,
         isActive: Boolean(isActive),
         criteria: { create: parsedCriteria },
       },
@@ -103,7 +113,7 @@ router.patch('/:scorecardId', requireOrgAdminOrSuper, async (req, res, next) => 
       return res.status(404).json({ error: 'Scorecard not found' })
     }
 
-    const { name, description, isActive, criteria } = req.body
+    const { name, description, language, isActive, criteria } = req.body
     const data = {}
 
     if (name !== undefined) {
@@ -113,6 +123,12 @@ router.patch('/:scorecardId', requireOrgAdminOrSuper, async (req, res, next) => 
       data.name = name.trim()
     }
     if (description !== undefined) data.description = description?.trim() || null
+    if (language !== undefined) {
+      if (!isValidScorecardLanguage(language)) {
+        return res.status(400).json({ error: 'Invalid scorecard language' })
+      }
+      data.language = language
+    }
     if (isActive !== undefined) data.isActive = Boolean(isActive)
 
     let parsedCriteria

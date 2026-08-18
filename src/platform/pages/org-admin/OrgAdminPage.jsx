@@ -20,7 +20,9 @@ export default function OrgAdminPage({ orgId }) {
   return (
     <div className="space-y-6">
       <Tabs tabs={TABS} active={activeTab} onChange={setActiveTab} />
-      {activeTab === 'team' && <OrgDashboardPage orgId={orgId ?? user?.organizationId} />}
+      {activeTab === 'team' && (
+        <OrgDashboardPage orgId={orgId ?? user?.organizationId} apiBase={apiBase} />
+      )}
       {activeTab === 'scorecards' && <ScorecardsPanel apiBase={apiBase} canManage />}
       {activeTab === 'calls' && (
         <CallsPanel apiBase={apiBase} canDeleteAny currentUserId={user?.id} />

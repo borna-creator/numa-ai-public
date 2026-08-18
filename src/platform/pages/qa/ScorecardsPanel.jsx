@@ -5,6 +5,11 @@ import {
   DEFAULT_CRITERION_QUESTION_TYPE,
   getCriterionQuestionTypeLabel,
 } from '../../../../shared/criterionQuestionTypes.js'
+import {
+  DEFAULT_SCORECARD_LANGUAGE,
+  SCORECARD_LANGUAGES,
+  getScorecardLanguageLabel,
+} from '../../../../shared/scorecardLanguages.js'
 
 const emptyCriterion = () => ({
   label: '',
@@ -22,6 +27,7 @@ export default function ScorecardsPanel({ apiBase, canManage = false }) {
   const [form, setForm] = useState({
     name: '',
     description: '',
+    language: DEFAULT_SCORECARD_LANGUAGE,
     isActive: true,
     criteria: [emptyCriterion()],
   })
@@ -43,7 +49,13 @@ export default function ScorecardsPanel({ apiBase, canManage = false }) {
   }, [apiBase])
 
   const resetForm = () => {
-    setForm({ name: '', description: '', isActive: true, criteria: [emptyCriterion()] })
+    setForm({
+      name: '',
+      description: '',
+      language: DEFAULT_SCORECARD_LANGUAGE,
+      isActive: true,
+      criteria: [emptyCriterion()],
+    })
     setEditingId(null)
     setShowForm(false)
   }
@@ -54,6 +66,7 @@ export default function ScorecardsPanel({ apiBase, canManage = false }) {
     setForm({
       name: scorecard.name,
       description: scorecard.description || '',
+      language: scorecard.language || DEFAULT_SCORECARD_LANGUAGE,
       isActive: scorecard.isActive,
       criteria: scorecard.criteria.map((c) => ({
         label: c.label,
@@ -71,6 +84,7 @@ export default function ScorecardsPanel({ apiBase, canManage = false }) {
       const payload = {
         name: form.name,
         description: form.description,
+        language: form.language,
         isActive: form.isActive,
         criteria: form.criteria.filter((c) => c.label.trim()),
       }
@@ -152,7 +166,18 @@ export default function ScorecardsPanel({ apiBase, canManage = false }) {
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               className="px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-numa-500/30"
             />
-            <label className="flex items-center gap-2 text-sm text-slate-700 px-2">
+            <select
+              value={form.language}
+              onChange={(e) => setForm({ ...form, language: e.target.value })}
+              className="px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-numa-500/30 bg-white"
+            >
+              {SCORECARD_LANGUAGES.map((lang) => (
+                <option key={lang.value} value={lang.value}>
+                  {lang.label}
+                </option>
+              ))}
+            </select>
+            <label className="flex items-center gap-2 text-sm text-slate-700 px-2 sm:col-span-2">
               <input
                 type="checkbox"
                 checked={form.isActive}
@@ -272,7 +297,8 @@ export default function ScorecardsPanel({ apiBase, canManage = false }) {
                     <p className="text-sm text-slate-500 mt-1">{scorecard.description}</p>
                   )}
                   <p className="text-xs text-slate-400 mt-2">
-                    {scorecard.criteria.length} criteria · {scorecard._count.calls} calls
+                    {getScorecardLanguageLabel(scorecard.language)} · {scorecard.criteria.length} criteria ·{' '}
+                    {scorecard._count.calls} calls
                   </p>
                 </div>
                 {canManage && (

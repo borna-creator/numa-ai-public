@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../api.js'
+import { getOrgApiBase } from '../../orgApi.js'
 
 function ConfirmButton({ label, confirmMessage, onConfirm, className, disabled }) {
   return (
@@ -18,11 +19,13 @@ function ConfirmButton({ label, confirmMessage, onConfirm, className, disabled }
 
 export default function OrgDashboardPage({
   orgId,
+  apiBase: apiBaseProp,
   mode = 'org-admin',
   activeSection,
   onOrgUpdated,
 }) {
   const isSuperAdmin = mode === 'super-admin'
+  const apiBase = apiBaseProp ?? getOrgApiBase({ role: isSuperAdmin ? 'SUPER_ADMIN' : 'ORG_ADMIN', orgId })
   const showAll = !activeSection || activeSection === 'all'
   const showOrganization = showAll || activeSection === 'organization'
   const showDepartments = showAll || activeSection === 'departments'
@@ -44,8 +47,8 @@ export default function OrgDashboardPage({
     try {
       setLoading(true)
       const requests = [
-        api(`/api/organizations/${orgId}/departments`),
-        api(`/api/organizations/${orgId}/users`),
+        api(`${apiBase}/departments`),
+        api(`${apiBase}/users`),
       ]
       if (isSuperAdmin) {
         requests.unshift(api(`/api/organizations/${orgId}`))
@@ -73,8 +76,8 @@ export default function OrgDashboardPage({
       try {
         setLoading(true)
         const requests = [
-          api(`/api/organizations/${orgId}/departments`),
-          api(`/api/organizations/${orgId}/users`),
+          api(`${apiBase}/departments`),
+          api(`${apiBase}/users`),
         ]
         if (isSuperAdmin) {
           requests.unshift(api(`/api/organizations/${orgId}`))
@@ -98,7 +101,7 @@ export default function OrgDashboardPage({
     }
 
     loadOrgData()
-  }, [orgId, isSuperAdmin])
+  }, [orgId, isSuperAdmin, apiBase])
 
   const run = async (fn) => {
     setError('')
@@ -118,7 +121,7 @@ export default function OrgDashboardPage({
   const createDepartment = (e) => {
     e.preventDefault()
     run(async () => {
-      await api(`/api/organizations/${orgId}/departments`, {
+      await api(`${apiBase}/departments`, {
         method: 'POST',
         body: JSON.stringify({ name: deptName }),
       })
@@ -128,7 +131,7 @@ export default function OrgDashboardPage({
 
   const updateDepartment = (departmentId, name) => {
     run(async () => {
-      await api(`/api/organizations/${orgId}/departments/${departmentId}`, {
+      await api(`${apiBase}/departments/${departmentId}`, {
         method: 'PATCH',
         body: JSON.stringify({ name }),
       })
@@ -138,14 +141,14 @@ export default function OrgDashboardPage({
 
   const deleteDepartment = (departmentId) => {
     run(async () => {
-      await api(`/api/organizations/${orgId}/departments/${departmentId}`, { method: 'DELETE' })
+      await api(`${apiBase}/departments/${departmentId}`, { method: 'DELETE' })
     })
   }
 
   const createUser = (e) => {
     e.preventDefault()
     run(async () => {
-      await api(`/api/organizations/${orgId}/users`, {
+      await api(`${apiBase}/users`, {
         method: 'POST',
         body: JSON.stringify(userForm),
       })
@@ -168,7 +171,7 @@ export default function OrgDashboardPage({
     if (editUserForm.departmentId) body.departmentId = editUserForm.departmentId
 
     run(async () => {
-      await api(`/api/organizations/${orgId}/users/${userId}`, {
+      await api(`${apiBase}/users/${userId}`, {
         method: 'PATCH',
         body: JSON.stringify(body),
       })
@@ -178,7 +181,7 @@ export default function OrgDashboardPage({
 
   const deleteUser = (userId) => {
     run(async () => {
-      await api(`/api/organizations/${orgId}/users/${userId}`, { method: 'DELETE' })
+      await api(`${apiBase}/users/${userId}`, { method: 'DELETE' })
     })
   }
 
@@ -244,7 +247,7 @@ export default function OrgDashboardPage({
               onSubmit={(e) => {
                 e.preventDefault()
                 run(async () => {
-                  await api(`/api/organizations/${orgId}/users`, {
+                  await api(`${apiBase}/users`, {
                     method: 'POST',
                     body: JSON.stringify({ ...adminForm, role: 'ORG_ADMIN' }),
                   })

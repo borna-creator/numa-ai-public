@@ -26,6 +26,12 @@ enum CriterionQuestionType {
   CONVERSATIONAL
 }
 
+enum ScorecardLanguage {
+  ENGLISH
+  ARABIC
+  FRENCH
+}
+
 model Organization {
   id          String       @id @default(cuid())
   name        String
@@ -75,6 +81,7 @@ model Scorecard {
   organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   name           String
   description    String?
+  language       ScorecardLanguage    @default(ENGLISH)
   isActive       Boolean              @default(true)
   criteria       ScorecardCriterion[]
   calls          Call[]
