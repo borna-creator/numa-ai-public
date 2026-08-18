@@ -2,7 +2,8 @@ import { Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import PlatformLayout from '../components/PlatformLayout.jsx'
 import SuperAdminPage from './super-admin/SuperAdminPage.jsx'
-import OrgDashboardPage from './org-admin/OrgDashboardPage.jsx'
+import OrgAdminPage from './org-admin/OrgAdminPage.jsx'
+import UserQaPage from './qa/UserQaPage.jsx'
 
 export default function DashboardPage() {
   const { user } = useAuth()
@@ -18,22 +19,15 @@ export default function DashboardPage() {
   if (user?.role === 'ORG_ADMIN') {
     return (
       <PlatformLayout title={`${user.organization?.name || 'Organization'} Admin`}>
-        <OrgDashboardPage orgId={user.organizationId} />
+        <OrgAdminPage orgId={user.organizationId} />
       </PlatformLayout>
     )
   }
 
   if (user?.role === 'USER') {
     return (
-      <PlatformLayout title="Dashboard">
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-8 text-center">
-          <p className="text-slate-600">
-            Welcome, {user.email}. Call scoring features are coming soon.
-          </p>
-          {user.department && (
-            <p className="text-sm text-slate-500 mt-2">Department: {user.department.name}</p>
-          )}
-        </div>
+      <PlatformLayout title="QA Platform">
+        <UserQaPage />
       </PlatformLayout>
     )
   }

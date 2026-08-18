@@ -86,6 +86,10 @@ SUPERTOKENS_CONNECTION_URI=http://127.0.0.1:3567
 
 SUPER_ADMIN_EMAIL=admin@numa-iq.com
 SUPER_ADMIN_PASSWORD=YOUR_STRONG_ADMIN_PASSWORD
+
+# Call audio storage on VPS 1
+CALL_STORAGE_PATH=/var/www/numaiq/storage/calls
+CALL_MAX_UPLOAD_BYTES=104857600
 ```
 
 ---
@@ -188,6 +192,13 @@ npx prisma generate
 npx prisma migrate deploy
 npm run build
 sudo systemctl restart numaiq-api
+```
+
+Ensure the call storage directory exists and is writable by the API user:
+
+```bash
+mkdir -p /var/www/numaiq/storage/calls
+chown -R generaladmin:generaladmin /var/www/numaiq/storage
 ```
 
 ---

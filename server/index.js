@@ -1,6 +1,7 @@
 import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
+import multer from 'multer'
 import supertokens from 'supertokens-node'
 import { middleware, errorHandler } from 'supertokens-node/framework/express/index.js'
 import { initSuperTokens } from './supertokens.js'
@@ -9,6 +10,9 @@ import meRouter from './routes/me.js'
 import organizationsRouter from './routes/organizations.js'
 import departmentsRouter from './routes/departments.js'
 import usersRouter from './routes/users.js'
+import scorecardsRouter from './routes/scorecards.js'
+import callsRouter from './routes/calls.js'
+import { ensureStorageRoot } from './services/storage.js'
 
 initSuperTokens()
 
@@ -66,10 +70,27 @@ app.use('/api/me', meRouter)
 app.use('/api/organizations', organizationsRouter)
 app.use('/api/organizations/:orgId/departments', departmentsRouter)
 app.use('/api/organizations/:orgId/users', usersRouter)
+app.use('/api/organizations/:orgId/scorecards', scorecardsRouter)
+app.use('/api/organizations/:orgId/calls', callsRouter)
+
+app.use((err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({ error: 'File too large' })
+    }
+    return res.status(400).json({ error: err.message })
+  }
+  if (err?.message?.includes('Unsupported audio format')) {
+    return res.status(400).json({ error: err.message })
+  }
+  next(err)
+})
 
 app.use(errorHandler())
 
 async function start() {
+  await ensureStorageRoot()
+
   try {
     await seedSupremeAdmin()
   } catch (err) {

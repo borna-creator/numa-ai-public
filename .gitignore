@@ -27,3 +27,6 @@ dist-ssr
 
 # Prisma (legacy generated path)
 /src/generated/prisma
+
+# Uploaded call audio (never commit)
+storage/

@@ -13,6 +13,13 @@ enum Role {
   USER
 }
 
+enum CallStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
 model Organization {
   id          String       @id @default(cuid())
   name        String
@@ -21,6 +28,8 @@ model Organization {
   updatedAt   DateTime     @updatedAt
   departments Department[]
   users       User[]
+  scorecards  Scorecard[]
+  calls       Call[]
 }
 
 model Department {
@@ -29,6 +38,7 @@ model Department {
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   users          User[]
+  calls          Call[]
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
@@ -45,9 +55,67 @@ model User {
   organization      Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   departmentId      String?
   department        Department?   @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  uploadedCalls     Call[]        @relation("UploadedCalls")
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 
   @@index([organizationId])
   @@index([departmentId])
+}
+
+model Scorecard {
+  id             String               @id @default(cuid())
+  organizationId String
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  description    String?
+  isActive       Boolean              @default(true)
+  criteria       ScorecardCriterion[]
+  calls          Call[]
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+}
+
+model ScorecardCriterion {
+  id          String    @id @default(cuid())
+  scorecardId String
+  scorecard   Scorecard @relation(fields: [scorecardId], references: [id], onDelete: Cascade)
+  label       String
+  description String?
+  weight      Int       @default(1)
+  sortOrder   Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([scorecardId])
+}
+
+model Call {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  departmentId   String?
+  department     Department?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  uploadedById   String
+  uploadedBy     User         @relation("UploadedCalls", fields: [uploadedById], references: [id], onDelete: Restrict)
+  scorecardId    String?
+  scorecard      Scorecard?   @relation(fields: [scorecardId], references: [id], onDelete: SetNull)
+  originalName   String
+  mimeType       String
+  fileSize       Int
+  storagePath    String
+  durationSec    Int?
+  status         CallStatus   @default(PENDING)
+  errorMessage   String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([organizationId])
+  @@index([departmentId])
+  @@index([uploadedById])
+  @@index([scorecardId])
+  @@index([status])
 }

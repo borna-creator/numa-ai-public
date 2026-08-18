@@ -5,7 +5,7 @@ export async function api(path, options = {}) {
     ...options,
     credentials: 'include',
     headers: {
-      'Content-Type': 'application/json',
+      ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
       ...options.headers,
     },
   })
@@ -19,6 +19,20 @@ export async function api(path, options = {}) {
   }
 
   return data
+}
+
+export async function uploadFile(path, formData) {
+  return api(path, { method: 'POST', body: formData })
+}
+
+export function formatFileSize(bytes) {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+export function formatDateTime(value) {
+  return new Date(value).toLocaleString()
 }
 
 export function getApiBase() {
