@@ -134,3 +134,45 @@ curl -X POST http://127.0.0.1:3001/auth/signin \
 ```
 
 If you have **no app data to keep**, the full volume reset in the section above is simpler.
+
+---
+
+## "Account not provisioned" after login
+
+SuperTokens accepted your password, but there is no matching row in the app `User` table (or the stored `superTokensUserId` is stale). This often happens after resetting the `supertokens` database or running migrations on an empty `numaiq` database.
+
+### Quick fix (keeps SuperTokens login as-is)
+
+On the VPS:
+
+```bash
+cd /var/www/numaiq
+npm run seed:admin
+sudo systemctl restart numaiq-api
+```
+
+You should see `Supreme admin profile synced` or `Supreme admin created`. Then sign in again at `/platform/login`.
+
+### Manual SQL (if seed script fails)
+
+Replace the email/password with your `.env` values:
+
+```bash
+# 1. Confirm SuperTokens user exists (sign-in should return 200)
+curl -s -X POST http://127.0.0.1:3001/auth/signin \
+  -H 'Content-Type: application/json' \
+  -d '{"formFields":[{"id":"email","value":"admin@numa-iq.com"},{"id":"password","value":"YOUR_PASSWORD"}]}'
+
+# 2. Clear broken app profiles (test data only!)
+sudo docker exec numaiq-db-1 psql -U numaiq -d numaiq -c 'DELETE FROM "User";'
+
+# 3. Re-seed and restart
+npm run seed:admin
+sudo systemctl restart numaiq-api
+```
+
+### Checklist
+
+- `SUPER_ADMIN_EMAIL` and `SUPER_ADMIN_PASSWORD` in `.env` match what you type at login
+- `DATABASE_URL` points to the `numaiq` database (not `supertokens`)
+- API logs after restart: `sudo journalctl -u numaiq-api -n 30 --no-pager | grep -i admin`
