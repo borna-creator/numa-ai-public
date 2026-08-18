@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { prisma } from '../db.js'
-import { verifyAudioAccessToken, verifyWorkerSecret } from '../services/jobTokens.js'
+import { verifyAudioAccessToken, verifyWorkerSecret, verifyJobCallbackToken } from '../services/jobTokens.js'
 import { createCallReadStream } from '../services/storage.js'
 import { computeOverallScore, normalizeCallbackResults } from '../services/scoring.js'
 import { WORKER_CALLBACK_HEADER } from '../../shared/workerContract.js'
@@ -54,6 +54,20 @@ router.post('/jobs/:jobId/complete', requireWorkerSecret, async (req, res, next)
 
     if (!job) {
       return res.status(404).json({ error: 'Job not found' })
+    }
+
+    const callbackToken = req.query.token
+    const tokenDispatchMs = verifyJobCallbackToken(job.id, callbackToken)
+    if (tokenDispatchMs == null) {
+      return res.status(401).json({ error: 'Invalid callback token' })
+    }
+
+    if (!job.dispatchedAt || job.dispatchedAt.getTime() !== tokenDispatchMs) {
+      return res.json({ ok: true, ignored: true })
+    }
+
+    if (job.status === 'COMPLETED') {
+      return res.json({ ok: true, duplicate: true })
     }
 
     const { status, transcript, results, errorMessage } = req.body

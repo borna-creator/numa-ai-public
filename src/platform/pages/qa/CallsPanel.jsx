@@ -22,12 +22,12 @@ export default function CallsPanel({
   const [uploadForm, setUploadForm] = useState({
     scorecardId: '',
     departmentId: userDepartmentId || '',
-    file: null,
+    files: [],
   })
 
-  const load = async () => {
+  const load = async (showSpinner = true) => {
     try {
-      setLoading(true)
+      if (showSpinner) setLoading(true)
       const [callsData, scorecardsData, deptData] = await Promise.all([
         api(`${apiBase}/calls`),
         api(`${apiBase}/scorecards`),
@@ -41,7 +41,7 @@ export default function CallsPanel({
     } catch (err) {
       setError(err.message)
     } finally {
-      setLoading(false)
+      if (showSpinner) setLoading(false)
     }
   }
 
@@ -76,10 +76,19 @@ export default function CallsPanel({
     return () => clearInterval(interval)
   }, [selectedCall?.status, selectedCall?.id, refreshSelectedCall])
 
+  const hasProcessingCalls = calls.some((c) => c.status === 'PROCESSING')
+
+  useEffect(() => {
+    if (!hasProcessingCalls) return undefined
+
+    const interval = setInterval(() => load(false), 4000)
+    return () => clearInterval(interval)
+  }, [hasProcessingCalls, apiBase])
+
   const handleUpload = async (e) => {
     e.preventDefault()
-    if (!uploadForm.file) {
-      setError('Choose an audio file to upload')
+    if (uploadForm.files.length === 0) {
+      setError('Choose at least one audio file to upload')
       return
     }
 
@@ -88,15 +97,26 @@ export default function CallsPanel({
 
     try {
       const formData = new FormData()
-      formData.append('audio', uploadForm.file)
+      for (const file of uploadForm.files) {
+        formData.append('audio', file)
+      }
       if (uploadForm.scorecardId) formData.append('scorecardId', uploadForm.scorecardId)
       if (uploadForm.departmentId) formData.append('departmentId', uploadForm.departmentId)
 
-      const { call } = await uploadFile(`${apiBase}/calls`, formData)
-      setUploadForm({ scorecardId: '', departmentId: userDepartmentId || '', file: null })
+      const data = await uploadFile(`${apiBase}/calls`, formData)
+      const uploaded = data.calls ?? (data.call ? [data.call] : [])
+
+      if (data.errors?.length) {
+        const failedNames = data.errors.map((item) => item.fileName).join(', ')
+        setError(`Some files failed: ${failedNames}`)
+      }
+
+      setUploadForm({ scorecardId: '', departmentId: userDepartmentId || '', files: [] })
       e.target.reset()
       await load()
-      setSelectedCallId(call.id)
+      if (uploaded.length > 0) {
+        setSelectedCallId(uploaded[0].id)
+      }
     } catch (err) {
       setError(err.message)
     } finally {
@@ -141,6 +161,8 @@ export default function CallsPanel({
     selectedCall.scorecardId &&
     ['PENDING', 'FAILED', 'COMPLETED'].includes(selectedCall.status)
 
+  const processingCount = calls.filter((c) => c.status === 'PROCESSING').length
+
   return (
     <div className="space-y-6">
       {error && (
@@ -148,9 +170,9 @@ export default function CallsPanel({
       )}
 
       <form onSubmit={handleUpload} className="rounded-2xl border border-slate-200/80 bg-white p-6 space-y-4">
-        <h3 className="text-lg font-semibold text-slate-900">Upload call</h3>
+        <h3 className="text-lg font-semibold text-slate-900">Upload calls</h3>
         <p className="text-sm text-slate-500">
-          MP3, WAV, M4A, OGG, or WEBM. Select a scorecard to score automatically after upload.
+          Select one or more files (MP3, WAV, M4A, OGG, WEBM). Choose a scorecard to score all uploads automatically.
         </p>
         <div className="grid sm:grid-cols-2 gap-4">
           <select
@@ -179,19 +201,39 @@ export default function CallsPanel({
           <input
             type="file"
             accept="audio/*,.mp3,.wav,.m4a,.ogg,.webm"
+            multiple
             required
-            onChange={(e) => setUploadForm({ ...uploadForm, file: e.target.files?.[0] || null })}
+            onChange={(e) =>
+              setUploadForm({ ...uploadForm, files: [...(e.target.files || [])] })
+            }
             className="sm:col-span-2 text-sm text-slate-600 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-numa-50 file:text-numa-700 file:font-semibold"
           />
+          {uploadForm.files.length > 0 && (
+            <p className="sm:col-span-2 text-xs text-slate-500">
+              {uploadForm.files.length} file{uploadForm.files.length === 1 ? '' : 's'} selected
+              {' · '}
+              {formatFileSize(uploadForm.files.reduce((sum, f) => sum + f.size, 0))} total
+            </p>
+          )}
         </div>
         <button
           type="submit"
           disabled={uploading}
           className="px-5 py-2.5 rounded-xl font-semibold text-white bg-numa-600 hover:bg-numa-700 disabled:opacity-60"
         >
-          {uploading ? 'Uploading…' : 'Upload call'}
+          {uploading
+            ? 'Uploading…'
+            : uploadForm.files.length > 1
+              ? `Upload ${uploadForm.files.length} calls`
+              : 'Upload call'}
         </button>
       </form>
+
+      {processingCount > 0 && (
+        <p className="text-sm text-blue-700 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
+          {processingCount} call{processingCount === 1 ? ' is' : 's are'} being scored — status updates automatically.
+        </p>
+      )}
 
       <div className="grid lg:grid-cols-2 gap-6">
         <section className="rounded-2xl border border-slate-200/80 bg-white overflow-hidden">

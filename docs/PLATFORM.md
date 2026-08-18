@@ -79,7 +79,7 @@ Use the credentials from `SUPER_ADMIN_EMAIL` / `SUPER_ADMIN_PASSWORD` in `.env`.
 | GET/POST/DELETE | `/api/organizations/:orgId/calls` | All org members (upload); list scoped by role |
 | GET | `/api/organizations/:orgId/calls/:callId/audio` | Authenticated org access — streams stored audio |
 
-Call audio files are stored on disk under `CALL_STORAGE_PATH` (default `./storage/calls`). Upload accepts MP3, WAV, M4A, OGG, WEBM up to `CALL_MAX_UPLOAD_BYTES`.
+Call audio files are stored on disk under `CALL_STORAGE_PATH` (default `./storage/calls`). Upload accepts MP3, WAV, M4A, OGG, WEBM up to `CALL_MAX_UPLOAD_BYTES` per file. Batch upload supports up to `CALL_MAX_BATCH_FILES` files per request (default 20). Multiple users can score different calls concurrently; each call has its own processing job.
 
 **Phase 2 (scoring pipeline):** See [PHASE-2.md](./PHASE-2.md). Upload with a scorecard to dispatch a job to the AI worker. Results include transcript, per-criterion scores, and overall %.
 

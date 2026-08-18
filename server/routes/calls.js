@@ -14,30 +14,33 @@ import { startCallProcessing } from '../services/workerDispatch.js'
 const router = Router({ mergeParams: true })
 
 const maxUploadBytes = Number(process.env.CALL_MAX_UPLOAD_BYTES || 100 * 1024 * 1024)
+const maxBatchFiles = Number(process.env.CALL_MAX_BATCH_FILES || 20)
+
+const audioFileFilter = (_req, file, cb) => {
+  const allowedTypes = new Set([
+    'audio/mpeg',
+    'audio/mp3',
+    'audio/wav',
+    'audio/x-wav',
+    'audio/mp4',
+    'audio/m4a',
+    'audio/ogg',
+    'audio/webm',
+    'video/webm',
+  ])
+  const allowedExt = /\.(mp3|wav|m4a|ogg|webm)$/i
+
+  if (allowedTypes.has(file.mimetype) || allowedExt.test(file.originalname)) {
+    cb(null, true)
+    return
+  }
+  cb(new Error('Unsupported audio format. Use MP3, WAV, M4A, OGG, or WEBM.'))
+}
 
 const upload = multer({
   dest: getUploadTmpDir(),
-  limits: { fileSize: maxUploadBytes, files: 1 },
-  fileFilter(_req, file, cb) {
-    const allowedTypes = new Set([
-      'audio/mpeg',
-      'audio/mp3',
-      'audio/wav',
-      'audio/x-wav',
-      'audio/mp4',
-      'audio/m4a',
-      'audio/ogg',
-      'audio/webm',
-      'video/webm',
-    ])
-    const allowedExt = /\.(mp3|wav|m4a|ogg|webm)$/i
-
-    if (allowedTypes.has(file.mimetype) || allowedExt.test(file.originalname)) {
-      cb(null, true)
-      return
-    }
-    cb(new Error('Unsupported audio format. Use MP3, WAV, M4A, OGG, or WEBM.'))
-  },
+  limits: { fileSize: maxUploadBytes, files: maxBatchFiles },
+  fileFilter: audioFileFilter,
 })
 
 router.use(requireSession, loadAppUser, requireOrgContext)
@@ -117,63 +120,61 @@ router.get('/:callId', async (req, res, next) => {
   }
 })
 
-router.post('/', upload.single('audio'), async (req, res, next) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'Audio file is required' })
-    }
-
-    const { scorecardId, departmentId } = req.body
-
-    if (scorecardId) {
-      const scorecard = await prisma.scorecard.findFirst({
-        where: { id: scorecardId, organizationId: req.organizationId, isActive: true },
-      })
-      if (!scorecard) {
-        return res.status(400).json({ error: 'Invalid or inactive scorecard' })
-      }
-    }
-
-    let resolvedDepartmentId = req.appUser.departmentId || null
-    if (departmentId) {
-      const department = await prisma.department.findFirst({
-        where: { id: departmentId, organizationId: req.organizationId },
-      })
-      if (!department) {
-        return res.status(400).json({ error: 'Invalid department' })
-      }
-      if (req.appUser.role === 'USER' && req.appUser.departmentId !== departmentId) {
-        return res.status(403).json({ error: 'Cannot upload to another department' })
-      }
-      resolvedDepartmentId = departmentId
-    }
-
-    const call = await prisma.call.create({
-      data: {
-        organizationId: req.organizationId,
-        departmentId: resolvedDepartmentId,
-        uploadedById: req.appUser.id,
-        scorecardId: scorecardId || null,
-        originalName: req.file.originalname,
-        mimeType: req.file.mimetype,
-        fileSize: req.file.size,
-        storagePath: 'pending',
-        status: 'PENDING',
-      },
+async function resolveUploadContext(req, { scorecardId, departmentId }) {
+  if (scorecardId) {
+    const scorecard = await prisma.scorecard.findFirst({
+      where: { id: scorecardId, organizationId: req.organizationId, isActive: true },
     })
-
-    let storagePath
-    try {
-      storagePath = await finalizeCallUpload(
-        req.organizationId,
-        call.id,
-        req.file.path,
-        req.file.originalname,
-      )
-    } catch (err) {
-      await prisma.call.delete({ where: { id: call.id } })
+    if (!scorecard) {
+      const err = new Error('Invalid or inactive scorecard')
+      err.status = 400
       throw err
     }
+  }
+
+  let resolvedDepartmentId = req.appUser.departmentId || null
+  if (departmentId) {
+    const department = await prisma.department.findFirst({
+      where: { id: departmentId, organizationId: req.organizationId },
+    })
+    if (!department) {
+      const err = new Error('Invalid department')
+      err.status = 400
+      throw err
+    }
+    if (req.appUser.role === 'USER' && req.appUser.departmentId !== departmentId) {
+      const err = new Error('Cannot upload to another department')
+      err.status = 403
+      throw err
+    }
+    resolvedDepartmentId = departmentId
+  }
+
+  return { scorecardId: scorecardId || null, resolvedDepartmentId }
+}
+
+async function createCallFromFile(req, file, { scorecardId, resolvedDepartmentId }) {
+  const call = await prisma.call.create({
+    data: {
+      organizationId: req.organizationId,
+      departmentId: resolvedDepartmentId,
+      uploadedById: req.appUser.id,
+      scorecardId: scorecardId || null,
+      originalName: file.originalname,
+      mimeType: file.mimetype,
+      fileSize: file.size,
+      storagePath: 'pending',
+      status: 'PENDING',
+    },
+  })
+
+  try {
+    const storagePath = await finalizeCallUpload(
+      req.organizationId,
+      call.id,
+      file.path,
+      file.originalname,
+    )
 
     const updated = await prisma.call.update({
       where: { id: call.id },
@@ -187,8 +188,48 @@ router.post('/', upload.single('audio'), async (req, res, next) => {
       })
     }
 
-    res.status(201).json({ call: updated })
+    return updated
   } catch (err) {
+    await prisma.call.delete({ where: { id: call.id } })
+    throw err
+  }
+}
+
+router.post('/', upload.array('audio', maxBatchFiles), async (req, res, next) => {
+  try {
+    const files = req.files ?? []
+    if (files.length === 0) {
+      return res.status(400).json({ error: 'At least one audio file is required' })
+    }
+
+    const { scorecardId, departmentId } = req.body
+    const context = await resolveUploadContext(req, { scorecardId, departmentId })
+
+    const calls = []
+    const errors = []
+
+    for (const file of files) {
+      try {
+        const call = await createCallFromFile(req, file, context)
+        calls.push(call)
+      } catch (err) {
+        errors.push({ fileName: file.originalname, error: err.message })
+      }
+    }
+
+    if (calls.length === 0) {
+      return res.status(400).json({ error: errors[0]?.error || 'Upload failed' })
+    }
+
+    res.status(201).json({
+      calls,
+      call: calls[0],
+      errors: errors.length > 0 ? errors : undefined,
+    })
+  } catch (err) {
+    if (err.status) {
+      return res.status(err.status).json({ error: err.message })
+    }
     next(err)
   }
 })

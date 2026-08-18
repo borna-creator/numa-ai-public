@@ -68,6 +68,46 @@ export function verifyWorkerSecret(headerValue) {
   return crypto.timingSafeEqual(Buffer.from(headerValue), Buffer.from(expected))
 }
 
+export function createJobCallbackToken(jobId, dispatchedAtMs) {
+  const payload = `${jobId}:${dispatchedAtMs}`
+  const signature = signPayload(payload)
+  return `${Buffer.from(payload).toString('base64url')}.${signature}`
+}
+
+export function verifyJobCallbackToken(jobId, token) {
+  if (!token?.includes('.')) {
+    return null
+  }
+
+  const [encodedPayload, signature] = token.split('.')
+  let payload
+  try {
+    payload = Buffer.from(encodedPayload, 'base64url').toString('utf8')
+  } catch {
+    return null
+  }
+
+  const expected = signPayload(payload)
+  if (signature.length !== expected.length) {
+    return null
+  }
+  if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
+    return null
+  }
+
+  const [tokenJobId, dispatchedAtRaw] = payload.split(':')
+  if (tokenJobId !== jobId) {
+    return null
+  }
+
+  const dispatchedAtMs = Number(dispatchedAtRaw)
+  if (!Number.isFinite(dispatchedAtMs)) {
+    return null
+  }
+
+  return dispatchedAtMs
+}
+
 export function getPublicApiBase() {
   return (process.env.API_DOMAIN || process.env.WEBSITE_DOMAIN || 'http://localhost:3001').replace(/\/$/, '')
 }

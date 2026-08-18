@@ -1,5 +1,5 @@
 import { prisma } from '../db.js'
-import { createAudioAccessToken, getPublicApiBase } from './jobTokens.js'
+import { createAudioAccessToken, createJobCallbackToken, getPublicApiBase } from './jobTokens.js'
 import { WORKER_CALLBACK_HEADER } from '../../shared/workerContract.js'
 
 function getWorkerUrl() {
@@ -18,16 +18,17 @@ async function loadCallForJob(callId) {
   })
 }
 
-export function buildJobPayload(job, call) {
+export function buildJobPayload(job, call, dispatchedAt) {
   const apiBase = getPublicApiBase()
-  const token = createAudioAccessToken(call.id)
+  const audioToken = createAudioAccessToken(call.id)
+  const callbackToken = createJobCallbackToken(job.id, dispatchedAt.getTime())
 
   return {
     jobId: job.id,
     callId: call.id,
     organizationId: call.organizationId,
-    audioUrl: `${apiBase}/api/internal/calls/${call.id}/audio?token=${token}`,
-    callbackUrl: `${apiBase}/api/internal/jobs/${job.id}/complete`,
+    audioUrl: `${apiBase}/api/internal/calls/${call.id}/audio?token=${audioToken}`,
+    callbackUrl: `${apiBase}/api/internal/jobs/${job.id}/complete?token=${callbackToken}`,
     scorecard: {
       id: call.scorecard.id,
       name: call.scorecard.name,
@@ -43,6 +44,14 @@ export function buildJobPayload(job, call) {
   }
 }
 
+function isJobInFlight(call) {
+  return (
+    call.status === 'PROCESSING' &&
+    call.processingJob &&
+    ['PENDING', 'DISPATCHED'].includes(call.processingJob.status)
+  )
+}
+
 export async function startCallProcessing(callId) {
   const call = await loadCallForJob(callId)
 
@@ -51,6 +60,18 @@ export async function startCallProcessing(callId) {
   }
   if (!call.scorecardId || !call.scorecard) {
     throw new Error('A scorecard is required before processing')
+  }
+
+  if (isJobInFlight(call)) {
+    if (call.processingJob.status === 'DISPATCHED') {
+      return call.processingJob
+    }
+
+    const workerUrl = getWorkerUrl()
+    if (workerUrl) {
+      await dispatchJob(call.processingJob.id)
+    }
+    return call.processingJob
   }
 
   const job = await prisma.processingJob.upsert({
@@ -64,6 +85,7 @@ export async function startCallProcessing(callId) {
       status: 'PENDING',
       lastError: null,
       completedAt: null,
+      dispatchedAt: null,
     },
   })
 
@@ -103,12 +125,17 @@ export async function dispatchJob(jobId) {
     throw new Error('Job or scorecard not found')
   }
 
+  if (job.status === 'DISPATCHED') {
+    return job
+  }
+
   const workerUrl = getWorkerUrl()
   if (!workerUrl) {
     throw new Error('WORKER_URL is not configured')
   }
 
-  const payload = buildJobPayload(job, job.call)
+  const dispatchedAt = new Date()
+  const payload = buildJobPayload(job, job.call, dispatchedAt)
 
   try {
     const response = await fetch(`${workerUrl}/jobs`, {
@@ -130,7 +157,7 @@ export async function dispatchJob(jobId) {
       data: {
         status: 'DISPATCHED',
         attempts: { increment: 1 },
-        dispatchedAt: new Date(),
+        dispatchedAt,
         lastError: null,
       },
     })
