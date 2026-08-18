@@ -113,6 +113,8 @@ npx prisma generate
 npx prisma migrate deploy
 ```
 
+If you get **P3005** (database not empty — common after earlier `db push`), see [MIGRATE-BASELINE.md](./MIGRATE-BASELINE.md).
+
 If no migrations exist yet, on your **Mac** first run `npm run db:migrate`, commit the `prisma/migrations` folder, push, then `git pull` on the server and run `migrate deploy` again.
 
 ---
