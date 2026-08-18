@@ -1,6 +1,7 @@
 import supertokens from 'supertokens-node'
 import Session from 'supertokens-node/recipe/session/index.js'
 import EmailPassword from 'supertokens-node/recipe/emailpassword/index.js'
+import AccountLinking from 'supertokens-node/recipe/accountlinking/index.js'
 
 export function initSuperTokens() {
   supertokens.init({
@@ -21,9 +22,15 @@ export function initSuperTokens() {
           formFields: [{ id: 'email' }, { id: 'password' }],
         },
       }),
+      AccountLinking.init({
+        shouldDoAutomaticAccountLinking: async () => ({
+          shouldAutomaticallyLink: true,
+          shouldRequireVerification: false,
+        }),
+      }),
       Session.init(),
     ],
   })
 }
 
-export { supertokens, Session, EmailPassword }
+export { supertokens, Session, EmailPassword, AccountLinking }

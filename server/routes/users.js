@@ -11,6 +11,7 @@ import {
   deleteAuthUser,
   updateAuthUserEmail,
   updateAuthUserPassword,
+  isAuthProvisioningError,
 } from '../services/users.js'
 
 const router = Router({ mergeParams: true })
@@ -92,6 +93,9 @@ router.post('/', requireOrgAdminOrSuper, async (req, res, next) => {
 
     res.status(201).json({ user })
   } catch (err) {
+    if (isAuthProvisioningError(err)) {
+      return res.status(409).json({ error: err.message })
+    }
     next(err)
   }
 })

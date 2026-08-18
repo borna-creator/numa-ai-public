@@ -1,14 +1,13 @@
 import { Router } from 'express'
 import { prisma } from '../db.js'
 import { requireSession, loadAppUser, requireSuperAdmin } from '../middleware/auth.js'
-import { createAuthUser, slugify, deleteAuthUser } from '../services/users.js'
+import { createAuthUser, slugify, deleteAuthUser, isAuthProvisioningError } from '../services/users.js'
 import { parseRequiredUserProfile } from '../../shared/userProfile.js'
 
 const router = Router()
+const superAdmin = [requireSession, loadAppUser, requireSuperAdmin]
 
-router.use(requireSession, loadAppUser, requireSuperAdmin)
-
-router.get('/', async (_req, res, next) => {
+router.get('/', ...superAdmin, async (_req, res, next) => {
   try {
     const organizations = await prisma.organization.findMany({
       orderBy: { createdAt: 'desc' },
@@ -26,7 +25,7 @@ router.get('/', async (_req, res, next) => {
   }
 })
 
-router.post('/', async (req, res, next) => {
+router.post('/', ...superAdmin, async (req, res, next) => {
   try {
     const { name, slug, adminEmail, adminPassword, adminFullName, adminJobTitle } = req.body
 
@@ -91,11 +90,14 @@ router.post('/', async (req, res, next) => {
 
     res.status(201).json({ organization: result })
   } catch (err) {
+    if (isAuthProvisioningError(err)) {
+      return res.status(409).json({ error: err.message })
+    }
     next(err)
   }
 })
 
-router.get('/:orgId', async (req, res, next) => {
+router.get('/:orgId', ...superAdmin, async (req, res, next) => {
   try {
     const organization = await prisma.organization.findUnique({
       where: { id: req.params.orgId },
@@ -118,7 +120,7 @@ router.get('/:orgId', async (req, res, next) => {
   }
 })
 
-router.patch('/:orgId', async (req, res, next) => {
+router.patch('/:orgId', ...superAdmin, async (req, res, next) => {
   try {
     const { name, slug } = req.body
     const organization = await prisma.organization.findUnique({ where: { id: req.params.orgId } })
@@ -170,7 +172,7 @@ router.patch('/:orgId', async (req, res, next) => {
   }
 })
 
-router.delete('/:orgId', async (req, res, next) => {
+router.delete('/:orgId', ...superAdmin, async (req, res, next) => {
   try {
     const organization = await prisma.organization.findUnique({
       where: { id: req.params.orgId },

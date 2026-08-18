@@ -137,3 +137,14 @@ export function slugify(name) {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
 }
+
+export function isAuthProvisioningError(err) {
+  const message = err?.message || ''
+  return (
+    message.includes('Auth account exists') ||
+    message.includes('SuperTokens signUp failed') ||
+    message.includes('Could not resolve existing auth user') ||
+    message.includes('Initialisation not done') ||
+    message.includes('AccountLinking')
+  )
+}

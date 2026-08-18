@@ -70,11 +70,11 @@ app.get('/health', (_req, res) => {
 })
 
 app.use('/api/me', meRouter)
-app.use('/api/organizations', organizationsRouter)
 app.use('/api/organizations/:orgId/departments', departmentsRouter)
 app.use('/api/organizations/:orgId/users', usersRouter)
 app.use('/api/organizations/:orgId/scorecards', scorecardsRouter)
 app.use('/api/organizations/:orgId/calls', callsRouter)
+app.use('/api/organizations', organizationsRouter)
 
 const orgMemberRouter = Router()
 orgMemberRouter.use(requireSession, loadAppUser, attachMemberOrg)
@@ -93,6 +93,11 @@ app.use((err, req, res, next) => {
   }
   if (err?.message?.includes('Unsupported audio format')) {
     return res.status(400).json({ error: err.message })
+  }
+  if (!res.headersSent) {
+    console.error('API error:', err)
+    res.status(500).json({ error: err.message || 'Internal server error' })
+    return
   }
   next(err)
 })
