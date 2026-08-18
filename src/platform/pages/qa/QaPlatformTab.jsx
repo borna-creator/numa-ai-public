@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api } from '../../api.js'
 import { Tabs } from '../../components/Tabs.jsx'
+import { getOrgApiBase } from '../../orgApi.js'
 import ScorecardsPanel from './ScorecardsPanel.jsx'
 import CallsPanel from './CallsPanel.jsx'
 
@@ -59,6 +60,11 @@ export default function QaPlatformTab({ canManageScorecards = false }) {
     })
   }
 
+  const selectedOrg = organizations.find((o) => o.id === selectedOrgId)
+  const apiBase = selectedOrgId
+    ? getOrgApiBase({ role: 'SUPER_ADMIN', orgId: selectedOrgId })
+    : null
+
   if (loading) {
     return <p className="text-slate-500 text-sm">Loading organizations…</p>
   }
@@ -90,17 +96,17 @@ export default function QaPlatformTab({ canManageScorecards = false }) {
         </select>
       </section>
 
-      {selectedOrgId ? (
+      {selectedOrgId && apiBase ? (
         <section className="rounded-2xl border border-slate-200/80 bg-white overflow-hidden">
           <div className="px-6 pt-4">
             <Tabs tabs={QA_TABS} active={activeTab} onChange={setActiveTab} />
           </div>
           <div className="p-6">
             {activeTab === 'calls' && (
-              <CallsPanel orgId={selectedOrgId} canDeleteAny />
+              <CallsPanel apiBase={apiBase} canDeleteAny />
             )}
             {activeTab === 'scorecards' && (
-              <ScorecardsPanel orgId={selectedOrgId} canManage={canManageScorecards} />
+              <ScorecardsPanel apiBase={apiBase} canManage={canManageScorecards} />
             )}
           </div>
         </section>

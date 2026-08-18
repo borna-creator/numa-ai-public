@@ -3,7 +3,7 @@ import { api } from '../../api.js'
 
 const emptyCriterion = () => ({ label: '', description: '', weight: 1 })
 
-export default function ScorecardsPanel({ orgId, canManage = false }) {
+export default function ScorecardsPanel({ apiBase, canManage = false }) {
   const [scorecards, setScorecards] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -19,7 +19,7 @@ export default function ScorecardsPanel({ orgId, canManage = false }) {
   const load = async () => {
     try {
       setLoading(true)
-      const data = await api(`/api/organizations/${orgId}/scorecards`)
+      const data = await api(`${apiBase}/scorecards`)
       setScorecards(data.scorecards)
     } catch (err) {
       setError(err.message)
@@ -30,7 +30,7 @@ export default function ScorecardsPanel({ orgId, canManage = false }) {
 
   useEffect(() => {
     load()
-  }, [orgId])
+  }, [apiBase])
 
   const resetForm = () => {
     setForm({ name: '', description: '', isActive: true, criteria: [emptyCriterion()] })
@@ -65,12 +65,12 @@ export default function ScorecardsPanel({ orgId, canManage = false }) {
       }
 
       if (editingId) {
-        await api(`/api/organizations/${orgId}/scorecards/${editingId}`, {
+        await api(`${apiBase}/scorecards/${editingId}`, {
           method: 'PATCH',
           body: JSON.stringify(payload),
         })
       } else {
-        await api(`/api/organizations/${orgId}/scorecards`, {
+        await api(`${apiBase}/scorecards`, {
           method: 'POST',
           body: JSON.stringify(payload),
         })
@@ -87,7 +87,7 @@ export default function ScorecardsPanel({ orgId, canManage = false }) {
     if (!window.confirm(`Delete scorecard "${scorecard.name}"?`)) return
     setError('')
     try {
-      await api(`/api/organizations/${orgId}/scorecards/${scorecard.id}`, { method: 'DELETE' })
+      await api(`${apiBase}/scorecards/${scorecard.id}`, { method: 'DELETE' })
       await load()
     } catch (err) {
       setError(err.message)

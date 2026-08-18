@@ -27,8 +27,13 @@ export async function loadAppUser(req, res, next) {
 
 export function requireRoles(...roles) {
   return (req, res, next) => {
-    if (!req.appUser || !roles.includes(req.appUser.role)) {
+    if (!req.appUser) {
       return res.status(403).json({ error: 'Insufficient permissions' })
+    }
+    if (!roles.includes(req.appUser.role)) {
+      return res.status(403).json({
+        error: `Insufficient permissions. Required: ${roles.join(' or ')}. Your role: ${req.appUser.role}`,
+      })
     }
     next()
   }

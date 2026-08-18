@@ -13,6 +13,9 @@ import usersRouter from './routes/users.js'
 import scorecardsRouter from './routes/scorecards.js'
 import callsRouter from './routes/calls.js'
 import { ensureStorageRoot } from './services/storage.js'
+import { Router } from 'express'
+import { requireSession, loadAppUser } from './middleware/auth.js'
+import { attachMemberOrg } from './middleware/orgAccess.js'
 
 initSuperTokens()
 
@@ -72,6 +75,13 @@ app.use('/api/organizations/:orgId/departments', departmentsRouter)
 app.use('/api/organizations/:orgId/users', usersRouter)
 app.use('/api/organizations/:orgId/scorecards', scorecardsRouter)
 app.use('/api/organizations/:orgId/calls', callsRouter)
+
+const orgMemberRouter = Router()
+orgMemberRouter.use(requireSession, loadAppUser, attachMemberOrg)
+orgMemberRouter.use('/scorecards', scorecardsRouter)
+orgMemberRouter.use('/calls', callsRouter)
+orgMemberRouter.use('/departments', departmentsRouter)
+app.use('/api/org', orgMemberRouter)
 
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) {

@@ -3,7 +3,7 @@ import { api, formatFileSize, uploadFile, formatDateTime } from '../../api.js'
 import { CallStatusBadge } from '../../components/CallStatusBadge.jsx'
 
 export default function CallsPanel({
-  orgId,
+  apiBase,
   canDeleteAny = false,
   userDepartmentId = null,
   currentUserId = null,
@@ -26,10 +26,10 @@ export default function CallsPanel({
     try {
       setLoading(true)
       const [callsData, scorecardsData, deptData] = await Promise.all([
-        api(`/api/organizations/${orgId}/calls`),
-        api(`/api/organizations/${orgId}/scorecards`),
+        api(`${apiBase}/calls`),
+        api(`${apiBase}/scorecards`),
         canDeleteAny
-          ? api(`/api/organizations/${orgId}/departments`)
+          ? api(`${apiBase}/departments`)
           : Promise.resolve({ departments: [] }),
       ])
       setCalls(callsData.calls)
@@ -44,7 +44,7 @@ export default function CallsPanel({
 
   useEffect(() => {
     load()
-  }, [orgId])
+  }, [apiBase])
 
   useEffect(() => {
     if (!selectedCallId) {
@@ -52,10 +52,10 @@ export default function CallsPanel({
       return
     }
 
-    api(`/api/organizations/${orgId}/calls/${selectedCallId}`)
+    api(`${apiBase}/calls/${selectedCallId}`)
       .then((data) => setSelectedCall(data.call))
       .catch((err) => setError(err.message))
-  }, [orgId, selectedCallId])
+  }, [apiBase, selectedCallId])
 
   const handleUpload = async (e) => {
     e.preventDefault()
@@ -73,7 +73,7 @@ export default function CallsPanel({
       if (uploadForm.scorecardId) formData.append('scorecardId', uploadForm.scorecardId)
       if (uploadForm.departmentId) formData.append('departmentId', uploadForm.departmentId)
 
-      await uploadFile(`/api/organizations/${orgId}/calls`, formData)
+      await uploadFile(`${apiBase}/calls`, formData)
       setUploadForm({ scorecardId: '', departmentId: userDepartmentId || '', file: null })
       e.target.reset()
       await load()
@@ -88,7 +88,7 @@ export default function CallsPanel({
     if (!window.confirm(`Delete call "${call.originalName}"?`)) return
     setError('')
     try {
-      await api(`/api/organizations/${orgId}/calls/${call.id}`, { method: 'DELETE' })
+      await api(`${apiBase}/calls/${call.id}`, { method: 'DELETE' })
       if (selectedCallId === call.id) setSelectedCallId(null)
       await load()
     } catch (err) {
@@ -100,9 +100,7 @@ export default function CallsPanel({
     return <p className="text-slate-500 text-sm">Loading calls…</p>
   }
 
-  const audioSrc = selectedCall
-    ? `/api/organizations/${orgId}/calls/${selectedCall.id}/audio`
-    : null
+  const audioSrc = selectedCall ? `${apiBase}/calls/${selectedCall.id}/audio` : null
 
   return (
     <div className="space-y-6">

@@ -1,8 +1,10 @@
 import { useAuth } from '../../context/AuthContext.jsx'
+import { getOrgApiBase } from '../../orgApi.js'
 import CallsPanel from './CallsPanel.jsx'
 
 export default function UserQaPage() {
   const { user } = useAuth()
+  const apiBase = getOrgApiBase({ role: user?.role, orgId: user?.organizationId })
 
   if (!user?.organizationId) {
     return (
@@ -14,7 +16,7 @@ export default function UserQaPage() {
 
   return (
     <CallsPanel
-      orgId={user.organizationId}
+      apiBase={apiBase}
       userDepartmentId={user.departmentId}
       currentUserId={user.id}
     />

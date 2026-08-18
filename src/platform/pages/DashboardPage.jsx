@@ -19,7 +19,7 @@ export default function DashboardPage() {
   if (user?.role === 'ORG_ADMIN') {
     return (
       <PlatformLayout title={`${user.organization?.name || 'Organization'} Admin`}>
-        <OrgAdminPage orgId={user.organizationId} />
+        <OrgAdminPage orgId={user.organizationId ?? user.organization?.id} />
       </PlatformLayout>
     )
   }

@@ -47,21 +47,6 @@ router.get('/', async (req, res, next) => {
   }
 })
 
-router.get('/:scorecardId', async (req, res, next) => {
-  try {
-    const scorecard = await prisma.scorecard.findFirst({
-      where: { id: req.params.scorecardId, organizationId: req.organizationId },
-      include: scorecardInclude,
-    })
-    if (!scorecard) {
-      return res.status(404).json({ error: 'Scorecard not found' })
-    }
-    res.json({ scorecard })
-  } catch (err) {
-    next(err)
-  }
-})
-
 router.post('/', requireOrgAdminOrSuper, async (req, res, next) => {
   try {
     const { name, description, isActive = true, criteria } = req.body
@@ -168,6 +153,21 @@ router.delete('/:scorecardId', requireOrgAdminOrSuper, async (req, res, next) =>
 
     await prisma.scorecard.delete({ where: { id: existing.id } })
     res.status(204).send()
+  } catch (err) {
+    next(err)
+  }
+})
+
+router.get('/:scorecardId', async (req, res, next) => {
+  try {
+    const scorecard = await prisma.scorecard.findFirst({
+      where: { id: req.params.scorecardId, organizationId: req.organizationId },
+      include: scorecardInclude,
+    })
+    if (!scorecard) {
+      return res.status(404).json({ error: 'Scorecard not found' })
+    }
+    res.json({ scorecard })
   } catch (err) {
     next(err)
   }
