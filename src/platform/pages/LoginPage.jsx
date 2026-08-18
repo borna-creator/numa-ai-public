@@ -49,18 +49,23 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-white via-numa-50/30 to-white flex flex-col items-center justify-center px-6">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen bg-[#f6f8fb] flex flex-col items-center justify-center px-6 relative overflow-hidden">
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute -top-32 right-0 w-[480px] h-[480px] rounded-full bg-numa-400/10 blur-3xl" />
+        <div className="absolute bottom-0 left-0 w-[360px] h-[360px] rounded-full bg-cyan-400/10 blur-3xl" />
+      </div>
+      <div className="w-full max-w-md relative">
         <div className="text-center mb-8">
           <Link to="/">
             <LogoWide className="h-10 w-auto mx-auto" />
           </Link>
-          <p className="mt-4 text-slate-600">Sign in to the NumaIQ QA Platform</p>
+          <h1 className="mt-6 text-2xl font-bold text-slate-900 tracking-tight">Welcome back</h1>
+          <p className="mt-2 text-slate-500">Sign in to the NumaIQ QA platform</p>
         </div>
 
         <form
           onSubmit={handleSubmit}
-          className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-8 space-y-5"
+          className="bg-white/90 backdrop-blur rounded-2xl border border-slate-200/80 shadow-xl shadow-slate-900/5 p-8 space-y-5"
         >
           {error && (
             <div className="p-3 rounded-xl bg-red-50 text-red-700 text-sm border border-red-100">
@@ -107,8 +112,8 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <p className="text-center text-sm text-slate-500 mt-6">
-          <Link to="/" className="text-numa-600 hover:underline">← Back to website</Link>
+        <p className="text-center text-sm text-slate-500 mt-6 relative">
+          <Link to="/" className="text-numa-600 hover:underline font-medium">← Back to website</Link>
         </p>
       </div>
     </div>

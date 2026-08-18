@@ -2,14 +2,15 @@ import { useState } from 'react'
 import { Tabs } from '../../components/Tabs.jsx'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { getOrgApiBase } from '../../orgApi.js'
+import { Card } from '../../components/ui.jsx'
 import OrgDashboardPage from '../org-admin/OrgDashboardPage.jsx'
 import ScorecardsPanel from '../qa/ScorecardsPanel.jsx'
 import CallsPanel from '../qa/CallsPanel.jsx'
 
 const TABS = [
-  { id: 'team', label: 'Team' },
-  { id: 'scorecards', label: 'Scorecards' },
   { id: 'calls', label: 'Calls' },
+  { id: 'scorecards', label: 'Scorecards' },
+  { id: 'team', label: 'Team' },
 ]
 
 export default function OrgAdminPage({ orgId }) {
@@ -19,7 +20,9 @@ export default function OrgAdminPage({ orgId }) {
 
   return (
     <div className="space-y-6">
-      <Tabs tabs={TABS} active={activeTab} onChange={setActiveTab} />
+      <Card className="!p-4">
+        <Tabs tabs={TABS} active={activeTab} onChange={setActiveTab} />
+      </Card>
       {activeTab === 'team' && (
         <OrgDashboardPage orgId={orgId ?? user?.organizationId} apiBase={apiBase} />
       )}

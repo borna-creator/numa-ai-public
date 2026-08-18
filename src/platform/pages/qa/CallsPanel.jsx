@@ -2,6 +2,19 @@ import { useEffect, useState, useCallback } from 'react'
 import { api, formatFileSize, uploadFile, formatDateTime } from '../../api.js'
 import { CallStatusBadge } from '../../components/CallStatusBadge.jsx'
 import CallTranscript from '../../components/CallTranscript.jsx'
+import {
+  Alert,
+  Button,
+  Card,
+  CardHeader,
+  EmptyState,
+  IconPhone,
+  IconUpload,
+  LoadingState,
+  ScoreRing,
+  Select,
+  StatCard,
+} from '../../components/ui.jsx'
 import { getUserDisplayName } from '../../../../shared/userProfile.js'
 import { getCriterionQuestionTypeLabel } from '../../../../shared/criterionQuestionTypes.js'
 
@@ -97,13 +110,11 @@ export default function CallsPanel({
       setSelectedCall(null)
       return
     }
-
     refreshSelectedCall()
   }, [apiBase, selectedCallId, refreshSelectedCall])
 
   useEffect(() => {
     if (!selectedCall || selectedCall.status !== 'PROCESSING') return undefined
-
     const interval = setInterval(refreshSelectedCall, 4000)
     return () => clearInterval(interval)
   }, [selectedCall?.status, selectedCall?.id, refreshSelectedCall])
@@ -112,7 +123,6 @@ export default function CallsPanel({
 
   useEffect(() => {
     if (!hasProcessingCalls) return undefined
-
     const interval = setInterval(() => load(false), 4000)
     return () => clearInterval(interval)
   }, [hasProcessingCalls, apiBase])
@@ -146,9 +156,7 @@ export default function CallsPanel({
       setUploadForm({ scorecardId: '', departmentId: userDepartmentId || '', files: [] })
       e.target.reset()
       await load()
-      if (uploaded.length > 0) {
-        setSelectedCallId(uploaded[0].id)
-      }
+      if (uploaded.length > 0) setSelectedCallId(uploaded[0].id)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -184,7 +192,7 @@ export default function CallsPanel({
   }
 
   if (loading) {
-    return <p className="text-slate-500 text-sm">Loading calls…</p>
+    return <LoadingState label="Loading calls…" />
   }
 
   const audioSrc = selectedCall ? `${apiBase}/calls/${selectedCall.id}/audio` : null
@@ -194,194 +202,223 @@ export default function CallsPanel({
     ['PENDING', 'FAILED', 'COMPLETED'].includes(selectedCall.status)
 
   const processingCount = calls.filter((c) => c.status === 'PROCESSING').length
+  const completedCalls = calls.filter((c) => c.status === 'COMPLETED' && c.overallScore != null)
+  const avgScore =
+    completedCalls.length > 0
+      ? Math.round(completedCalls.reduce((sum, c) => sum + c.overallScore, 0) / completedCalls.length)
+      : null
 
   return (
     <div className="space-y-6">
-      {error && (
-        <div className="p-3 rounded-xl bg-red-50 text-red-700 text-sm border border-red-100">{error}</div>
-      )}
+      {error && <Alert variant="error">{error}</Alert>}
 
-      <form onSubmit={handleUpload} className="rounded-2xl border border-slate-200/80 bg-white p-6 space-y-4">
-        <h3 className="text-lg font-semibold text-slate-900">Upload calls</h3>
-        <p className="text-sm text-slate-500">
-          Select one or more files (MP3, WAV, M4A, OGG, WEBM). Choose a scorecard to score all uploads automatically.
-        </p>
-        <div className="grid sm:grid-cols-2 gap-4">
-          <select
-            value={uploadForm.scorecardId}
-            onChange={(e) => setUploadForm({ ...uploadForm, scorecardId: e.target.value })}
-            className="px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-numa-500/30"
-          >
-            <option value="">Scorecard (optional)</option>
-            {scorecards.map((s) => (
-              <option key={s.id} value={s.id}>{s.name}</option>
-            ))}
-          </select>
-          {(canDeleteAny || departments.length > 0) && (
-            <select
-              value={uploadForm.departmentId}
-              onChange={(e) => setUploadForm({ ...uploadForm, departmentId: e.target.value })}
-              disabled={!canDeleteAny && Boolean(userDepartmentId)}
-              className="px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-numa-500/30 disabled:bg-slate-50"
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <StatCard label="Total calls" value={calls.length} tone="default" />
+        <StatCard label="Completed" value={completedCalls.length} tone="success" />
+        <StatCard label="In progress" value={processingCount} tone={processingCount ? 'warning' : 'default'} />
+        <StatCard label="Avg score" value={avgScore != null ? `${avgScore}%` : '—'} tone="brand" />
+      </div>
+
+      <Card>
+        <CardHeader
+          title="Upload calls"
+          description="Drop in recordings to transcribe and score against a scorecard. Supports MP3, WAV, M4A, OGG, and WEBM."
+        />
+        <form onSubmit={handleUpload} className="space-y-5">
+          <div className="grid sm:grid-cols-2 gap-4">
+            <Select
+              label="Scorecard"
+              value={uploadForm.scorecardId}
+              onChange={(e) => setUploadForm({ ...uploadForm, scorecardId: e.target.value })}
             >
-              <option value="">Department (optional)</option>
-              {departments.map((d) => (
-                <option key={d.id} value={d.id}>{d.name}</option>
+              <option value="">Optional — upload without scoring</option>
+              {scorecards.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
               ))}
-            </select>
-          )}
-          <input
-            type="file"
-            accept="audio/*,.mp3,.wav,.m4a,.ogg,.webm"
-            multiple
-            required
-            onChange={(e) =>
-              setUploadForm({ ...uploadForm, files: [...(e.target.files || [])] })
-            }
-            className="sm:col-span-2 text-sm text-slate-600 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-numa-50 file:text-numa-700 file:font-semibold"
-          />
-          {uploadForm.files.length > 0 && (
-            <p className="sm:col-span-2 text-xs text-slate-500">
-              {uploadForm.files.length} file{uploadForm.files.length === 1 ? '' : 's'} selected
-              {' · '}
-              {formatFileSize(uploadForm.files.reduce((sum, f) => sum + f.size, 0))} total
-            </p>
-          )}
-        </div>
-        <button
-          type="submit"
-          disabled={uploading}
-          className="px-5 py-2.5 rounded-xl font-semibold text-white bg-numa-600 hover:bg-numa-700 disabled:opacity-60"
-        >
-          {uploading
-            ? 'Uploading…'
-            : uploadForm.files.length > 1
-              ? `Upload ${uploadForm.files.length} calls`
-              : 'Upload call'}
-        </button>
-      </form>
+            </Select>
+            {(canDeleteAny || departments.length > 0) && (
+              <Select
+                label="Department"
+                value={uploadForm.departmentId}
+                onChange={(e) => setUploadForm({ ...uploadForm, departmentId: e.target.value })}
+                disabled={!canDeleteAny && Boolean(userDepartmentId)}
+              >
+                <option value="">Optional</option>
+                {departments.map((d) => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+              </Select>
+            )}
+          </div>
+
+          <label className="block cursor-pointer group">
+            <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/50 px-6 py-10 text-center transition-colors group-hover:border-numa-300 group-hover:bg-numa-50/30">
+              <div className="w-12 h-12 rounded-2xl bg-white border border-slate-200 text-numa-600 flex items-center justify-center mx-auto mb-3 shadow-sm">
+                <IconUpload />
+              </div>
+              <p className="text-sm font-semibold text-slate-800">Choose audio files</p>
+              <p className="text-xs text-slate-500 mt-1">Click to browse or drag files here</p>
+              {uploadForm.files.length > 0 && (
+                <p className="text-xs font-medium text-numa-700 mt-3">
+                  {uploadForm.files.length} file{uploadForm.files.length === 1 ? '' : 's'} ·{' '}
+                  {formatFileSize(uploadForm.files.reduce((sum, f) => sum + f.size, 0))}
+                </p>
+              )}
+            </div>
+            <input
+              type="file"
+              accept="audio/*,.mp3,.wav,.m4a,.ogg,.webm"
+              multiple
+              required
+              className="sr-only"
+              onChange={(e) => setUploadForm({ ...uploadForm, files: [...(e.target.files || [])] })}
+            />
+          </label>
+
+          <Button type="submit" disabled={uploading} className="w-full sm:w-auto">
+            {uploading
+              ? 'Uploading…'
+              : uploadForm.files.length > 1
+                ? `Upload ${uploadForm.files.length} calls`
+                : 'Upload call'}
+          </Button>
+        </form>
+      </Card>
 
       {processingCount > 0 && (
-        <p className="text-sm text-blue-700 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
-          {processingCount} call{processingCount === 1 ? ' is' : 's are'} being scored — status updates automatically.
-        </p>
+        <Alert variant="info">
+          {processingCount} call{processingCount === 1 ? ' is' : 's are'} being scored — results refresh automatically.
+        </Alert>
       )}
 
-      <div className="grid lg:grid-cols-2 gap-6">
-        <section className="rounded-2xl border border-slate-200/80 bg-white overflow-hidden">
-          <div className="px-6 py-4 border-b border-slate-100">
-            <h3 className="text-lg font-semibold text-slate-900">Calls</h3>
+      <div className="grid xl:grid-cols-5 gap-6">
+        <Card padding={false} className="xl:col-span-2 overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50">
+            <h3 className="text-sm font-semibold text-slate-900">Call library</h3>
+            <p className="text-xs text-slate-500 mt-0.5">{calls.length} recording{calls.length === 1 ? '' : 's'}</p>
           </div>
           {calls.length === 0 ? (
-            <p className="p-6 text-sm text-slate-500">No calls uploaded yet.</p>
+            <EmptyState
+              icon={IconPhone}
+              title="No calls yet"
+              description="Upload your first recording to start transcribing and scoring."
+            />
           ) : (
-            <ul className="divide-y divide-slate-100 max-h-[520px] overflow-y-auto">
-              {calls.map((call) => (
-                <li key={call.id}>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedCallId(call.id)}
-                    className={`w-full text-left px-6 py-4 hover:bg-slate-50 transition-colors ${
-                      selectedCallId === call.id ? 'bg-numa-50/50' : ''
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="font-medium text-slate-900 truncate">{call.originalName}</p>
-                        <p className="text-xs text-slate-500 mt-1">
-                          {formatDateTime(call.createdAt)} · {formatFileSize(call.fileSize)}
-                        </p>
-                        <p className="text-xs text-slate-500 mt-1">
-                          {call.scorecard?.name || 'No scorecard'}
-                          {call.department?.name ? ` · ${call.department.name}` : ''}
-                          {call.overallScore != null ? ` · Score ${call.overallScore}%` : ''}
-                        </p>
+            <ul className="divide-y divide-slate-100 max-h-[640px] overflow-y-auto">
+              {calls.map((call) => {
+                const selected = selectedCallId === call.id
+                return (
+                  <li key={call.id}>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedCallId(call.id)}
+                      className={`w-full text-left px-5 py-4 transition-all border-l-[3px] ${
+                        selected
+                          ? 'bg-numa-50/60 border-l-numa-500'
+                          : 'border-l-transparent hover:bg-slate-50/80'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-semibold text-slate-900 truncate text-sm">{call.originalName}</p>
+                          <p className="text-xs text-slate-500 mt-1">
+                            {formatDateTime(call.createdAt)} · {formatFileSize(call.fileSize)}
+                          </p>
+                          <p className="text-xs text-slate-500 mt-1 truncate">
+                            {call.scorecard?.name || 'No scorecard'}
+                            {call.department?.name ? ` · ${call.department.name}` : ''}
+                          </p>
+                        </div>
+                        <div className="flex flex-col items-end gap-2 shrink-0">
+                          <CallStatusBadge status={call.status} />
+                          {call.overallScore != null && (
+                            <span className="text-xs font-bold text-numa-700 tabular-nums">{call.overallScore}%</span>
+                          )}
+                        </div>
                       </div>
-                      <CallStatusBadge status={call.status} />
-                    </div>
-                  </button>
-                </li>
-              ))}
+                    </button>
+                  </li>
+                )
+              })}
             </ul>
           )}
-        </section>
+        </Card>
 
-        <section className="rounded-2xl border border-slate-200/80 bg-white p-6 min-h-[280px]">
+        <Card className="xl:col-span-3 min-h-[480px]">
           {!selectedCall ? (
-            <p className="text-sm text-slate-500">Select a call to view details and playback.</p>
+            <EmptyState
+              icon={IconPhone}
+              title="Select a call"
+              description="Choose a recording from the library to review scores, transcript, and playback."
+            />
           ) : (
-            <div className="space-y-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h3 className="text-lg font-semibold text-slate-900 break-all">{selectedCall.originalName}</h3>
+            <div className="space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 pb-5 border-b border-slate-100">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2 mb-2">
+                    <CallStatusBadge status={selectedCall.status} />
+                  </div>
+                  <h3 className="text-lg font-bold text-slate-900 break-all tracking-tight">{selectedCall.originalName}</h3>
                   <p className="text-sm text-slate-500 mt-1">Uploaded {formatDateTime(selectedCall.createdAt)}</p>
                 </div>
-                <CallStatusBadge status={selectedCall.status} />
+                {selectedCall.overallScore != null && <ScoreRing score={selectedCall.overallScore} />}
               </div>
 
-              {selectedCall.overallScore != null && (
-                <div className="rounded-xl bg-numa-50 border border-numa-100 px-4 py-3">
-                  <p className="text-xs font-semibold text-numa-700 uppercase tracking-wide">Overall score</p>
-                  <p className="text-3xl font-bold text-numa-900 mt-1">{selectedCall.overallScore}%</p>
-                </div>
-              )}
-
               {selectedCall.status === 'FAILED' && selectedCall.errorMessage && (
-                <div className="rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-sm text-red-700">
-                  {selectedCall.errorMessage}
-                </div>
+                <Alert variant="error">{selectedCall.errorMessage}</Alert>
               )}
 
               {selectedCall.status === 'PROCESSING' && (
-                <p className="text-sm text-blue-700 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
-                  Scoring in progress… this page refreshes automatically.
-                </p>
+                <Alert variant="info">Scoring in progress — this view updates automatically.</Alert>
               )}
 
-              <dl className="grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <dt className="text-slate-500">Uploaded by</dt>
-                  <dd className="font-medium text-slate-900">
-                    {getUserDisplayName(selectedCall.uploadedBy)}
-                    {selectedCall.uploadedBy.jobTitle && (
-                      <span className="text-slate-500 font-normal"> · {selectedCall.uploadedBy.jobTitle}</span>
-                    )}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-slate-500">Size</dt>
-                  <dd className="font-medium text-slate-900">{formatFileSize(selectedCall.fileSize)}</dd>
-                </div>
-                <div>
-                  <dt className="text-slate-500">Scorecard</dt>
-                  <dd className="font-medium text-slate-900">{selectedCall.scorecard?.name || '—'}</dd>
-                </div>
-                <div>
-                  <dt className="text-slate-500">Department</dt>
-                  <dd className="font-medium text-slate-900">{selectedCall.department?.name || '—'}</dd>
-                </div>
-              </dl>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {[
+                  ['Uploaded by', getUserDisplayName(selectedCall.uploadedBy)],
+                  ['Size', formatFileSize(selectedCall.fileSize)],
+                  ['Scorecard', selectedCall.scorecard?.name || '—'],
+                  ['Department', selectedCall.department?.name || '—'],
+                ].map(([label, value]) => (
+                  <div key={label} className="rounded-xl bg-slate-50 border border-slate-100 px-3 py-2.5">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
+                    <p className="text-sm font-medium text-slate-900 mt-0.5 truncate" title={value}>{value}</p>
+                  </div>
+                ))}
+              </div>
 
               {selectedCall.results?.length > 0 && (
                 <div>
-                  <p className="text-sm font-medium text-slate-900 mb-2">Criterion scores</p>
-                  <ul className="space-y-2">
+                  <h4 className="text-sm font-semibold text-slate-900 mb-3">Criterion scores</h4>
+                  <ul className="space-y-2.5">
                     {selectedCall.results.map((r) => (
-                      <li key={r.id} className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm">
-                        <div className="flex items-start justify-between gap-2">
-                          <span className="font-medium text-slate-900">{r.criterion.label}</span>
+                      <li
+                        key={r.id}
+                        className={`rounded-xl border px-4 py-3.5 ${
+                          r.passed
+                            ? 'border-emerald-100 bg-emerald-50/40'
+                            : 'border-red-100 bg-red-50/40'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="font-semibold text-slate-900 text-sm">{r.criterion.label}</p>
+                            <p className="text-xs text-slate-500 mt-0.5">
+                              {getCriterionQuestionTypeLabel(r.criterion.questionType)}
+                            </p>
+                          </div>
                           <span
-                            className={`shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full ${
-                              r.passed ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
+                            className={`shrink-0 text-xs font-bold px-2.5 py-1 rounded-full ${
+                              r.passed ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
                             }`}
                           >
                             {r.value}
                           </span>
                         </div>
-                        <p className="text-xs text-slate-500 mt-1">
-                          {getCriterionQuestionTypeLabel(r.criterion.questionType)}
-                        </p>
-                        {r.reasoning && <p className="text-slate-600 mt-2 text-xs leading-relaxed">{r.reasoning}</p>}
+                        {r.reasoning && (
+                          <p className="text-slate-600 mt-2.5 text-xs leading-relaxed border-t border-black/5 pt-2.5">
+                            {r.reasoning}
+                          </p>
+                        )}
                       </li>
                     ))}
                   </ul>
@@ -392,17 +429,17 @@ export default function CallsPanel({
                 const meta = getTranscriptMeta(selectedCall.transcript)
                 if (!meta?.summary && !meta?.sentiment) return null
                 return (
-                  <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 space-y-2">
+                  <div className="rounded-xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-4 space-y-3">
                     {meta.summary && (
                       <div>
-                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Summary</p>
-                        <p className="text-sm text-slate-700 mt-1 leading-relaxed">{meta.summary}</p>
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">AI summary</p>
+                        <p className="text-sm text-slate-700 mt-1.5 leading-relaxed">{meta.summary}</p>
                       </div>
                     )}
                     {meta.sentiment && (
                       <p className="text-xs text-slate-500">
-                        Overall sentiment:{' '}
-                        <span className="font-medium text-slate-700 capitalize">{meta.sentiment}</span>
+                        Overall sentiment{' '}
+                        <span className="font-semibold text-slate-800 capitalize">{meta.sentiment}</span>
                         {meta.sentimentScore != null && (
                           <span className="text-slate-400"> ({meta.sentimentScore.toFixed(2)})</span>
                         )}
@@ -414,54 +451,31 @@ export default function CallsPanel({
 
               {selectedCall.transcript && <CallTranscript transcript={selectedCall.transcript} />}
 
-              {selectedCall.scorecard?.criteria?.length > 0 && !selectedCall.results?.length && (
-                <div>
-                  <p className="text-sm font-medium text-slate-900 mb-2">Scorecard criteria</p>
-                  <ul className="text-sm text-slate-600 space-y-1">
-                    {selectedCall.scorecard.criteria.map((c) => (
-                      <li key={c.id}>
-                        • {c.label}
-                        <span className="text-slate-400 ml-1">
-                          ({getCriterionQuestionTypeLabel(c.questionType)})
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <audio controls className="w-full h-10" src={audioSrc}>
+                  Your browser does not support audio playback.
+                </audio>
+              </div>
 
-              <audio controls className="w-full" src={audioSrc}>
-                Your browser does not support audio playback.
-              </audio>
-
-              <div className="flex flex-wrap gap-3">
+              <div className="flex flex-wrap gap-2 pt-1">
                 {canProcess && (
-                  <button
-                    type="button"
-                    onClick={handleProcess}
-                    disabled={processing}
-                    className="px-4 py-2 rounded-xl text-sm font-semibold text-white bg-numa-600 hover:bg-numa-700 disabled:opacity-60"
-                  >
+                  <Button onClick={handleProcess} disabled={processing}>
                     {processing
                       ? 'Starting…'
                       : selectedCall.status === 'COMPLETED'
                         ? 'Re-score call'
                         : 'Start scoring'}
-                  </button>
+                  </Button>
                 )}
                 {(canDeleteAny || selectedCall.uploadedBy.id === currentUserId) && (
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(selectedCall)}
-                    className="text-sm font-semibold text-red-600 hover:text-red-700"
-                  >
+                  <Button variant="danger" onClick={() => handleDelete(selectedCall)}>
                     Delete call
-                  </button>
+                  </Button>
                 )}
               </div>
             </div>
           )}
-        </section>
+        </Card>
       </div>
     </div>
   )

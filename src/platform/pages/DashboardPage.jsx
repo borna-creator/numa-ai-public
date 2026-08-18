@@ -10,7 +10,10 @@ export default function DashboardPage() {
 
   if (user?.role === 'SUPER_ADMIN') {
     return (
-      <PlatformLayout title="Super Admin">
+      <PlatformLayout
+        title="Super Admin"
+        subtitle="Manage organizations, teams, and QA operations across the platform."
+      >
         <SuperAdminPage />
       </PlatformLayout>
     )
@@ -18,7 +21,10 @@ export default function DashboardPage() {
 
   if (user?.role === 'ORG_ADMIN') {
     return (
-      <PlatformLayout title={`${user.organization?.name || 'Organization'} Admin`}>
+      <PlatformLayout
+        title={user.organization?.name || 'Organization'}
+        subtitle="Configure scorecards, review calls, and manage your team."
+      >
         <OrgAdminPage orgId={user.organizationId ?? user.organization?.id} />
       </PlatformLayout>
     )
@@ -26,7 +32,10 @@ export default function DashboardPage() {
 
   if (user?.role === 'USER') {
     return (
-      <PlatformLayout title="QA Platform">
+      <PlatformLayout
+        title="Call QA"
+        subtitle="Upload recordings, track scoring progress, and review AI-generated results."
+      >
         <UserQaPage />
       </PlatformLayout>
     )

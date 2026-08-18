@@ -14,6 +14,19 @@ import {
   DEFAULT_STT_SETTINGS,
   STT_SETTINGS_META,
 } from '../../../../shared/sttSettings.js'
+import {
+  Alert,
+  Button,
+  Card,
+  CardHeader,
+  EmptyState,
+  IconClipboard,
+  Input,
+  LoadingState,
+  PageIntro,
+  Select,
+  Textarea,
+} from '../../components/ui.jsx'
 
 const emptyCriterion = () => ({
   label: '',
@@ -144,247 +157,229 @@ export default function ScorecardsPanel({ apiBase, canManage = false }) {
   }
 
   if (loading) {
-    return <p className="text-slate-500 text-sm">Loading scorecards…</p>
+    return <LoadingState label="Loading scorecards…" />
   }
 
   return (
     <div className="space-y-6">
-      {error && (
-        <div className="p-3 rounded-xl bg-red-50 text-red-700 text-sm border border-red-100">{error}</div>
-      )}
+      {error && <Alert variant="error">{error}</Alert>}
 
       {canManage && (
-        <div className="flex justify-between items-center gap-4">
-          <p className="text-sm text-slate-600">
-            Define the criteria calls will be scored against.
-          </p>
-          {!showForm && (
-            <button
-              type="button"
-              onClick={() => setShowForm(true)}
-              className="px-4 py-2 rounded-xl text-sm font-semibold text-white bg-numa-600 hover:bg-numa-700 shrink-0"
-            >
-              + New scorecard
-            </button>
-          )}
-        </div>
+        <PageIntro
+          title="Scorecards"
+          description="Define the criteria and transcription settings used when calls are scored."
+          action={
+            !showForm && (
+              <Button onClick={() => setShowForm(true)}>+ New scorecard</Button>
+            )
+          }
+        />
       )}
 
       {canManage && showForm && (
-        <form onSubmit={handleSubmit} className="rounded-2xl border border-slate-200/80 bg-white p-6 space-y-4">
-          <h3 className="text-lg font-semibold text-slate-900">
-            {editingId ? 'Edit scorecard' : 'New scorecard'}
-          </h3>
-          <div className="grid sm:grid-cols-2 gap-4">
-            <input
-              placeholder="Scorecard name"
-              required
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              className="px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-numa-500/30"
-            />
-            <select
-              value={form.language}
-              onChange={(e) => setForm({ ...form, language: e.target.value })}
-              className="px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-numa-500/30 bg-white"
-            >
-              {SCORECARD_LANGUAGES.map((lang) => (
-                <option key={lang.value} value={lang.value}>
-                  {lang.label}
-                </option>
-              ))}
-            </select>
-            <label className="flex items-center gap-2 text-sm text-slate-700 px-2 sm:col-span-2">
-              <input
-                type="checkbox"
-                checked={form.isActive}
-                onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
+        <Card>
+          <CardHeader
+            title={editingId ? 'Edit scorecard' : 'New scorecard'}
+            description="Configure language, criteria, and transcription behavior for this scorecard."
+          />
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="grid sm:grid-cols-2 gap-4">
+              <Input
+                label="Name"
+                placeholder="e.g. Inbound sales QA"
+                required
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
               />
-              Active for new uploads
-            </label>
-            <textarea
-              placeholder="Description (optional)"
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-              className="sm:col-span-2 px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-numa-500/30 min-h-[80px]"
-            />
-          </div>
-
-          <div className="rounded-xl border border-slate-200 overflow-hidden">
-            <button
-              type="button"
-              onClick={() => setShowSttSettings((v) => !v)}
-              className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 text-sm font-medium text-slate-900 hover:bg-slate-100"
-            >
-              Transcription options
-              <span className="text-slate-500">{showSttSettings ? 'Hide' : 'Show'}</span>
-            </button>
-            {showSttSettings && (
-              <div className="p-4 grid sm:grid-cols-2 gap-3 border-t border-slate-200">
-                {STT_SETTINGS_META.map(({ key, label, description }) => (
-                  <label
-                    key={key}
-                    className="flex items-start gap-2 text-sm text-slate-700 p-2 rounded-lg hover:bg-slate-50"
-                    title={description}
-                  >
-                    <input
-                      type="checkbox"
-                      className="mt-0.5"
-                      checked={Boolean(form.sttSettings[key])}
-                      onChange={(e) => updateSttSetting(key, e.target.checked)}
-                    />
-                    <span>
-                      <span className="font-medium text-slate-900">{label}</span>
-                      <span className="block text-xs text-slate-500 mt-0.5">{description}</span>
-                    </span>
-                  </label>
+              <Select
+                label="Language"
+                value={form.language}
+                onChange={(e) => setForm({ ...form, language: e.target.value })}
+              >
+                {SCORECARD_LANGUAGES.map((lang) => (
+                  <option key={lang.value} value={lang.value}>{lang.label}</option>
                 ))}
-              </div>
-            )}
-          </div>
+              </Select>
+              <Textarea
+                label="Description"
+                placeholder="Optional notes for your team"
+                className="sm:col-span-2"
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+              />
+              <label className="sm:col-span-2 flex items-center gap-2.5 text-sm text-slate-700 px-1">
+                <input
+                  type="checkbox"
+                  className="rounded border-slate-300 text-numa-600 focus:ring-numa-500/30"
+                  checked={form.isActive}
+                  onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
+                />
+                Active for new uploads
+              </label>
+            </div>
 
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-medium text-slate-900">Criteria</p>
+            <div className="rounded-xl border border-slate-200 overflow-hidden">
               <button
                 type="button"
-                onClick={() => setForm({ ...form, criteria: [...form.criteria, emptyCriterion()] })}
-                className="text-sm text-numa-600 hover:underline"
+                onClick={() => setShowSttSettings((v) => !v)}
+                className="w-full flex items-center justify-between px-4 py-3.5 bg-slate-50/80 text-sm font-semibold text-slate-900 hover:bg-slate-100/80 transition-colors"
               >
-                + Add criterion
+                Transcription options
+                <span className="text-xs font-medium text-slate-500">{showSttSettings ? 'Hide' : 'Show'}</span>
               </button>
-            </div>
-            {form.criteria.map((criterion, index) => (
-              <div key={index} className="grid sm:grid-cols-12 gap-3 p-4 rounded-xl bg-slate-50 border border-slate-100">
-                <input
-                  placeholder="Criterion label"
-                  required
-                  value={criterion.label}
-                  onChange={(e) => updateCriterion(index, 'label', e.target.value)}
-                  className="sm:col-span-3 px-3 py-2 rounded-lg border border-slate-200 text-sm"
-                />
-                <select
-                  value={criterion.questionType}
-                  onChange={(e) => updateCriterion(index, 'questionType', e.target.value)}
-                  className="sm:col-span-3 px-3 py-2 rounded-lg border border-slate-200 text-sm bg-white"
-                  title="Question type"
-                >
-                  {CRITERION_QUESTION_TYPES.map((type) => (
-                    <option key={type.value} value={type.value}>
-                      {type.label}
-                    </option>
+              {showSttSettings && (
+                <div className="p-4 grid sm:grid-cols-2 gap-2 border-t border-slate-200 bg-white">
+                  {STT_SETTINGS_META.map(({ key, label, description }) => (
+                    <label
+                      key={key}
+                      className="flex items-start gap-2.5 text-sm text-slate-700 p-3 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-100"
+                      title={description}
+                    >
+                      <input
+                        type="checkbox"
+                        className="mt-0.5 rounded border-slate-300 text-numa-600"
+                        checked={Boolean(form.sttSettings[key])}
+                        onChange={(e) => updateSttSetting(key, e.target.checked)}
+                      />
+                      <span>
+                        <span className="font-medium text-slate-900">{label}</span>
+                        <span className="block text-xs text-slate-500 mt-0.5 leading-relaxed">{description}</span>
+                      </span>
+                    </label>
                   ))}
-                </select>
-                <input
-                  placeholder="Description / guidance"
-                  value={criterion.description}
-                  onChange={(e) => updateCriterion(index, 'description', e.target.value)}
-                  className="sm:col-span-4 px-3 py-2 rounded-lg border border-slate-200 text-sm"
-                />
-                <input
-                  type="number"
-                  min={1}
-                  value={criterion.weight}
-                  onChange={(e) => updateCriterion(index, 'weight', Number(e.target.value))}
-                  className="sm:col-span-1 px-3 py-2 rounded-lg border border-slate-200 text-sm"
-                  title="Weight"
-                />
-                {form.criteria.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setForm({
-                        ...form,
-                        criteria: form.criteria.filter((_, i) => i !== index),
-                      })
-                    }
-                    className="sm:col-span-1 text-sm text-red-600 hover:underline"
-                  >
-                    Remove
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
+                </div>
+              )}
+            </div>
 
-          <div className="flex gap-3">
-            <button type="submit" className="px-5 py-2.5 rounded-xl font-semibold text-white bg-numa-600 hover:bg-numa-700">
-              {editingId ? 'Save changes' : 'Create scorecard'}
-            </button>
-            <button
-              type="button"
-              onClick={resetForm}
-              className="px-5 py-2.5 rounded-xl font-semibold text-slate-600 border border-slate-200 hover:bg-slate-50"
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-slate-900">Criteria</p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setForm({ ...form, criteria: [...form.criteria, emptyCriterion()] })}
+                >
+                  + Add criterion
+                </Button>
+              </div>
+              {form.criteria.map((criterion, index) => (
+                <div key={index} className="grid sm:grid-cols-12 gap-3 p-4 rounded-xl bg-slate-50/80 border border-slate-100">
+                  <input
+                    placeholder="Criterion label"
+                    required
+                    value={criterion.label}
+                    onChange={(e) => updateCriterion(index, 'label', e.target.value)}
+                    className="sm:col-span-3 px-3 py-2 rounded-lg border border-slate-200 text-sm bg-white"
+                  />
+                  <select
+                    value={criterion.questionType}
+                    onChange={(e) => updateCriterion(index, 'questionType', e.target.value)}
+                    className="sm:col-span-3 px-3 py-2 rounded-lg border border-slate-200 text-sm bg-white"
+                  >
+                    {CRITERION_QUESTION_TYPES.map((type) => (
+                      <option key={type.value} value={type.value}>{type.label}</option>
+                    ))}
+                  </select>
+                  <input
+                    placeholder="Guidance (optional)"
+                    value={criterion.description}
+                    onChange={(e) => updateCriterion(index, 'description', e.target.value)}
+                    className="sm:col-span-4 px-3 py-2 rounded-lg border border-slate-200 text-sm bg-white"
+                  />
+                  <input
+                    type="number"
+                    min={1}
+                    value={criterion.weight}
+                    onChange={(e) => updateCriterion(index, 'weight', Number(e.target.value))}
+                    className="sm:col-span-1 px-3 py-2 rounded-lg border border-slate-200 text-sm bg-white"
+                    title="Weight"
+                  />
+                  {form.criteria.length > 1 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="sm:col-span-1 text-red-600"
+                      onClick={() =>
+                        setForm({ ...form, criteria: form.criteria.filter((_, i) => i !== index) })
+                      }
+                    >
+                      Remove
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="flex flex-wrap gap-2 pt-2">
+              <Button type="submit">{editingId ? 'Save changes' : 'Create scorecard'}</Button>
+              <Button variant="secondary" onClick={resetForm}>Cancel</Button>
+            </div>
+          </form>
+        </Card>
       )}
 
       {scorecards.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-8 text-center">
-          <p className="text-slate-600">No scorecards yet.</p>
-          {canManage && (
-            <p className="text-sm text-slate-500 mt-1">Create one before uploading calls for scoring.</p>
-          )}
-        </div>
+        <Card>
+          <EmptyState
+            icon={IconClipboard}
+            title="No scorecards yet"
+            description={canManage ? 'Create a scorecard before uploading calls for scoring.' : 'Your admin has not created scorecards yet.'}
+            action={canManage && !showForm && <Button onClick={() => setShowForm(true)}>+ New scorecard</Button>}
+          />
+        </Card>
       ) : (
-        <div className="space-y-4">
+        <div className="grid gap-4">
           {scorecards.map((scorecard) => (
-            <div key={scorecard.id} className="rounded-2xl border border-slate-200/80 bg-white p-6">
-              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
+            <Card key={scorecard.id} className="hover:shadow-md hover:shadow-slate-900/5 transition-shadow">
+              <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 mb-5">
                 <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-lg font-semibold text-slate-900">{scorecard.name}</h3>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-lg font-bold text-slate-900 tracking-tight">{scorecard.name}</h3>
                     {!scorecard.isActive && (
-                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                      <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
                         Inactive
                       </span>
                     )}
                   </div>
                   {scorecard.description && (
-                    <p className="text-sm text-slate-500 mt-1">{scorecard.description}</p>
+                    <p className="text-sm text-slate-500 mt-1.5 leading-relaxed">{scorecard.description}</p>
                   )}
-                  <p className="text-xs text-slate-400 mt-2">
-                    {getScorecardLanguageLabel(scorecard.language)} · {scorecard.criteria.length} criteria ·{' '}
-                    {scorecard._count.calls} calls
-                  </p>
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">
+                      {getScorecardLanguageLabel(scorecard.language)}
+                    </span>
+                    <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-numa-50 text-numa-700">
+                      {scorecard.criteria.length} criteria
+                    </span>
+                    <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">
+                      {scorecard._count.calls} calls
+                    </span>
+                  </div>
                 </div>
                 {canManage && (
                   <div className="flex gap-2 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => startEdit(scorecard)}
-                      className="text-sm text-numa-600 hover:underline"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(scorecard)}
-                      className="text-sm text-red-600 hover:underline"
-                    >
-                      Delete
-                    </button>
+                    <Button variant="secondary" size="sm" onClick={() => startEdit(scorecard)}>Edit</Button>
+                    <Button variant="danger" size="sm" onClick={() => handleDelete(scorecard)}>Delete</Button>
                   </div>
                 )}
               </div>
-              <ul className="divide-y divide-slate-100 rounded-xl border border-slate-100">
+              <ul className="divide-y divide-slate-100 rounded-xl border border-slate-100 overflow-hidden">
                 {scorecard.criteria.map((criterion) => (
-                  <li key={criterion.id} className="px-4 py-3 text-sm">
-                    <span className="font-medium text-slate-900">{criterion.label}</span>
-                    <span className="ml-2 text-xs font-medium px-2 py-0.5 rounded-full bg-numa-50 text-numa-700">
-                      {getCriterionQuestionTypeLabel(criterion.questionType)}
-                    </span>
+                  <li key={criterion.id} className="px-4 py-3.5 text-sm bg-white even:bg-slate-50/40">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-semibold text-slate-900">{criterion.label}</span>
+                      <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-numa-50 text-numa-700">
+                        {getCriterionQuestionTypeLabel(criterion.questionType)}
+                      </span>
+                      <span className="text-xs text-slate-400">Weight {criterion.weight}</span>
+                    </div>
                     {criterion.description && (
-                      <span className="text-slate-500 ml-2">— {criterion.description}</span>
+                      <p className="text-slate-500 text-xs mt-1.5 leading-relaxed">{criterion.description}</p>
                     )}
-                    <span className="text-slate-400 ml-2">(weight {criterion.weight})</span>
                   </li>
                 ))}
               </ul>
-            </div>
+            </Card>
           ))}
         </div>
       )}

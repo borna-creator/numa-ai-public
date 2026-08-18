@@ -2,6 +2,15 @@ import { useEffect, useState } from 'react'
 import { api } from '../../api.js'
 import { getOrgApiBase } from '../../orgApi.js'
 import { getUserDisplayName } from '../../../../shared/userProfile.js'
+import {
+  Alert,
+  Avatar,
+  Button,
+  Card,
+  CardHeader,
+  Input,
+  LoadingState,
+} from '../../components/ui.jsx'
 
 const emptyUserForm = () => ({
   fullName: '',
@@ -20,16 +29,21 @@ const emptyAdminForm = () => ({
 
 function UserIdentity({ user, showEmail = true }) {
   return (
-    <div>
-      <span className="font-medium text-slate-900">{getUserDisplayName(user)}</span>
-      {user.jobTitle && (
-        <span className="ml-2 text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
-          {user.jobTitle}
-        </span>
-      )}
-      {showEmail && user.fullName && (
-        <p className="text-xs text-slate-500 mt-0.5">{user.email}</p>
-      )}
+    <div className="flex items-center gap-3 min-w-0">
+      <Avatar name={getUserDisplayName(user)} size="sm" />
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-semibold text-slate-900 truncate">{getUserDisplayName(user)}</span>
+          {user.jobTitle && (
+            <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+              {user.jobTitle}
+            </span>
+          )}
+        </div>
+        {showEmail && user.fullName && (
+          <p className="text-xs text-slate-500 mt-0.5 truncate">{user.email}</p>
+        )}
+      </div>
     </div>
   )
 }
@@ -286,285 +300,222 @@ export default function OrgDashboardPage({
   }
 
   if (loading) {
-    return <p className="text-slate-500 text-sm">Loading…</p>
+    return <LoadingState label="Loading team data…" />
   }
 
   const orgAdmins = users.filter((u) => u.role === 'ORG_ADMIN')
   const orgUsers = users.filter((u) => u.role === 'USER')
-  const sectionClass = activeSection
-    ? 'space-y-4'
-    : 'rounded-2xl border border-slate-200/80 bg-white p-6'
+  const sectionWrap = (children, title, description) => (
+    <Card>
+      {(title || description) && <CardHeader title={title} description={description} />}
+      {children}
+    </Card>
+  )
 
   return (
-    <div className={activeSection ? 'space-y-6' : 'space-y-8'}>
-      {error && (
-        <div className="p-3 rounded-xl bg-red-50 text-red-700 text-sm border border-red-100">{error}</div>
-      )}
+    <div className="space-y-6">
+      {error && <Alert variant="error">{error}</Alert>}
 
       {isSuperAdmin && showOrganization && organization && (
-        <section className={sectionClass}>
-          <h2 className="text-lg font-semibold text-slate-900 mb-4">Organization settings</h2>
+        sectionWrap(
           <form onSubmit={updateOrganization} className="grid sm:grid-cols-2 gap-4">
-            <input
+            <Input
               placeholder="Organization name"
               required
               value={orgForm.name}
               onChange={(e) => setOrgForm({ ...orgForm, name: e.target.value })}
-              className="px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-numa-500/30"
             />
-            <input
+            <Input
               placeholder="Slug"
               required
               value={orgForm.slug}
               onChange={(e) => setOrgForm({ ...orgForm, slug: e.target.value })}
-              className="px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-numa-500/30"
             />
-            <button
-              type="submit"
-              className="sm:col-span-2 py-2.5 rounded-xl font-semibold text-white bg-numa-600 hover:bg-numa-700"
-            >
-              Save organization
-            </button>
-          </form>
-        </section>
+            <Button type="submit" className="sm:col-span-2 w-full sm:w-auto">Save organization</Button>
+          </form>,
+          'Organization settings',
+          'Update the display name and URL slug for this organization.',
+        )
       )}
 
       {isSuperAdmin && showOrganization && (
-        <section className={sectionClass}>
-          <h2 className="text-lg font-semibold text-slate-900 mb-4">Organization admins</h2>
-          {orgAdmins.length === 0 && (
-            <form
-              onSubmit={(e) => {
-                e.preventDefault()
-                run(async () => {
-                  await api(`${apiBase}/users`, {
-                    method: 'POST',
-                    body: JSON.stringify({ ...adminForm, role: 'ORG_ADMIN' }),
+        sectionWrap(
+          <>
+            {orgAdmins.length === 0 && (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  run(async () => {
+                    await api(`${apiBase}/users`, {
+                      method: 'POST',
+                      body: JSON.stringify({ ...adminForm, role: 'ORG_ADMIN' }),
+                    })
+                    setAdminForm(emptyAdminForm())
                   })
-                  setAdminForm(emptyAdminForm())
-                })
-              }}
-              className="grid sm:grid-cols-2 gap-3 mb-4"
-            >
-              <ProfileFields form={adminForm} onChange={setAdminForm} />
-              <button
-                type="submit"
-                className="sm:col-span-2 py-2.5 rounded-xl text-sm font-semibold text-white bg-numa-600 hover:bg-numa-700"
+                }}
+                className="grid sm:grid-cols-2 gap-3 mb-4"
               >
-                Add org admin
-              </button>
+                <ProfileFields form={adminForm} onChange={setAdminForm} />
+                <Button type="submit" className="sm:col-span-2 w-full sm:w-auto">Add org admin</Button>
+              </form>
+            )}
+            {orgAdmins.length > 0 && (
+              <ul className="divide-y divide-slate-100 rounded-xl border border-slate-100 overflow-hidden">
+                {orgAdmins.map((admin) => (
+                  <li key={admin.id} className="px-4 py-3.5 bg-white even:bg-slate-50/40">
+                    {editingUser === admin.id ? (
+                      <div className="grid sm:grid-cols-2 gap-3">
+                        <ProfileFields form={editUserForm} onChange={setEditUserForm} />
+                        <div className="sm:col-span-2 flex gap-2">
+                          <Button size="sm" onClick={() => updateUser(admin.id)}>Save</Button>
+                          <Button variant="secondary" size="sm" onClick={() => setEditingUser(null)}>Cancel</Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-sm">
+                        <UserIdentity user={admin} />
+                        <div className="flex gap-2">
+                          <Button variant="ghost" size="sm" onClick={() => startEditUser(admin)}>Edit</Button>
+                          <ConfirmButton
+                            label="Delete"
+                            confirmMessage={`Remove org admin ${admin.email}?`}
+                            onConfirm={() => deleteUser(admin.id)}
+                            className="text-sm font-semibold text-red-600 hover:text-red-700 px-3 py-1.5"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>,
+          'Organization admins',
+          'Administrators who can manage scorecards, calls, and team members.',
+        )
+      )}
+
+      {showDepartments &&
+        sectionWrap(
+          <>
+            <form onSubmit={createDepartment} className="flex gap-3 mb-4">
+              <Input
+                placeholder="Department name"
+                required
+                value={deptName}
+                onChange={(e) => setDeptName(e.target.value)}
+                className="flex-1"
+              />
+              <Button type="submit" className="shrink-0">Add department</Button>
             </form>
-          )}
-          {orgAdmins.length > 0 && (
-            <ul className="divide-y divide-slate-100 rounded-xl border border-slate-100">
-              {orgAdmins.map((admin) => (
-                <li key={admin.id} className="px-4 py-3">
-                  {editingUser === admin.id ? (
-                    <div className="grid sm:grid-cols-2 gap-3">
-                      <ProfileFields
-                        form={editUserForm}
-                        onChange={setEditUserForm}
-                      />
-                      <div className="sm:col-span-2 flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => updateUser(admin.id)}
-                          className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-numa-600"
-                        >
-                          Save
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setEditingUser(null)}
-                          className="px-4 py-2 rounded-lg text-sm text-slate-600 border border-slate-200"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-sm">
-                      <UserIdentity user={admin} />
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => startEditUser(admin)}
-                          className="text-numa-600 hover:underline"
-                        >
-                          Edit
-                        </button>
-                        <ConfirmButton
-                          label="Delete"
-                          confirmMessage={`Remove org admin ${admin.email}?`}
-                          onConfirm={() => deleteUser(admin.id)}
-                          className="text-red-600 hover:underline"
+            {departments.length === 0 ? (
+              <p className="text-sm text-slate-500 leading-relaxed">
+                No departments yet. Add at least one department, then switch to Users to invite team members.
+              </p>
+            ) : (
+              <ul className="divide-y divide-slate-100 rounded-xl border border-slate-100 overflow-hidden">
+                {departments.map((d) => (
+                  <li key={d.id} className="px-4 py-3.5 bg-white even:bg-slate-50/40">
+                    {editingDept === d.id ? (
+                      <form
+                        className="flex gap-2"
+                        onSubmit={(e) => {
+                          e.preventDefault()
+                          updateDepartment(d.id, new FormData(e.currentTarget).get('name'))
+                        }}
+                      >
+                        <input
+                          name="name"
+                          defaultValue={d.name}
+                          required
+                          className="flex-1 px-3 py-2 rounded-lg border border-slate-200 text-sm"
                         />
+                        <Button type="submit" size="sm">Save</Button>
+                        <Button variant="secondary" size="sm" type="button" onClick={() => setEditingDept(null)}>
+                          Cancel
+                        </Button>
+                      </form>
+                    ) : (
+                      <div className="flex justify-between items-center text-sm gap-2">
+                        <div>
+                          <span className="font-semibold text-slate-900">{d.name}</span>
+                          <span className="text-slate-500 ml-2 text-xs">{d._count.users} users</span>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button variant="ghost" size="sm" onClick={() => setEditingDept(d.id)}>Edit</Button>
+                          <ConfirmButton
+                            label="Delete"
+                            confirmMessage={`Delete department "${d.name}"? Users will be unassigned.`}
+                            onConfirm={() => deleteDepartment(d.id)}
+                            className="text-sm font-semibold text-red-600 hover:text-red-700 px-3 py-1.5"
+                          />
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      )}
-
-      {showDepartments && (
-      <section className={sectionClass}>
-        <h2 className="text-lg font-semibold text-slate-900 mb-4">Departments</h2>
-        <form onSubmit={createDepartment} className="flex gap-3 mb-4">
-          <input
-            placeholder="Department name"
-            required
-            value={deptName}
-            onChange={(e) => setDeptName(e.target.value)}
-            className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-numa-500/30"
-          />
-          <button type="submit" className="px-5 py-2.5 rounded-xl font-semibold text-white bg-numa-600 hover:bg-numa-700">
-            Add
-          </button>
-        </form>
-        {departments.length === 0 ? (
-          <p className="text-sm text-slate-500">
-            No departments yet. Add at least one department, then switch to the Users tab to add team members.
-          </p>
-        ) : (
-          <ul className="divide-y divide-slate-100 rounded-xl border border-slate-100">
-            {departments.map((d) => (
-              <li key={d.id} className="px-4 py-3">
-                {editingDept === d.id ? (
-                  <form
-                    className="flex gap-2"
-                    onSubmit={(e) => {
-                      e.preventDefault()
-                      updateDepartment(d.id, new FormData(e.currentTarget).get('name'))
-                    }}
-                  >
-                    <input
-                      name="name"
-                      defaultValue={d.name}
-                      required
-                      className="flex-1 px-3 py-2 rounded-lg border border-slate-200 text-sm"
-                    />
-                    <button type="submit" className="px-3 py-2 rounded-lg text-sm font-semibold text-white bg-numa-600">
-                      Save
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setEditingDept(null)}
-                      className="px-3 py-2 rounded-lg text-sm text-slate-600 border border-slate-200"
-                    >
-                      Cancel
-                    </button>
-                  </form>
-                ) : (
-                  <div className="flex justify-between items-center text-sm gap-2">
-                    <div>
-                      <span className="font-medium text-slate-900">{d.name}</span>
-                      <span className="text-slate-500 ml-2">{d._count.users} users</span>
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setEditingDept(d.id)}
-                        className="text-numa-600 hover:underline"
-                      >
-                        Edit
-                      </button>
-                      <ConfirmButton
-                        label="Delete"
-                        confirmMessage={`Delete department "${d.name}"? Users will be unassigned from it.`}
-                        onConfirm={() => deleteDepartment(d.id)}
-                        className="text-red-600 hover:underline"
-                      />
-                    </div>
-                  </div>
-                )}
-              </li>
-            ))}
-          </ul>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>,
+          'Departments',
+          'Group users by team or function for reporting and call assignment.',
         )}
-      </section>
-      )}
 
-      {showUsers && (
-      <section className={sectionClass}>
-        <h2 className="text-lg font-semibold text-slate-900 mb-4">Users</h2>
-        <form onSubmit={createUser} className="grid sm:grid-cols-2 gap-3 mb-4">
-          <ProfileFields
-            form={userForm}
-            onChange={setUserForm}
-            includeDepartment
-            departments={departments}
-          />
-          <button
-            type="submit"
-            disabled={departments.length === 0}
-            className="sm:col-span-2 py-2.5 rounded-xl font-semibold text-white bg-numa-600 hover:bg-numa-700 disabled:opacity-50"
-          >
-            Create user
-          </button>
-        </form>
-        {orgUsers.length === 0 ? (
-          <p className="text-sm text-slate-500">No users yet.</p>
-        ) : (
-          <ul className="divide-y divide-slate-100 rounded-xl border border-slate-100">
-            {orgUsers.map((u) => (
-              <li key={u.id} className="px-4 py-3">
-                {editingUser === u.id ? (
-                  <div className="grid sm:grid-cols-2 gap-3">
-                    <ProfileFields
-                      form={editUserForm}
-                      onChange={setEditUserForm}
-                      includeDepartment
-                      departments={departments}
-                    />
-                    <div className="sm:col-span-2 flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => updateUser(u.id)}
-                        className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-numa-600"
-                      >
-                        Save
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setEditingUser(null)}
-                        className="px-4 py-2 rounded-lg text-sm text-slate-600 border border-slate-200"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 text-sm">
-                    <div>
-                      <UserIdentity user={u} />
-                      <span className="text-slate-500 text-xs mt-1 block">{u.department?.name || '—'}</span>
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => startEditUser(u)}
-                        className="text-numa-600 hover:underline"
-                      >
-                        Edit
-                      </button>
-                      <ConfirmButton
-                        label="Delete"
-                        confirmMessage={`Delete user ${u.email}?`}
-                        onConfirm={() => deleteUser(u.id)}
-                        className="text-red-600 hover:underline"
-                      />
-                    </div>
-                  </div>
-                )}
-              </li>
-            ))}
-          </ul>
+      {showUsers &&
+        sectionWrap(
+          <>
+            <form onSubmit={createUser} className="grid sm:grid-cols-2 gap-3 mb-4">
+              <ProfileFields form={userForm} onChange={setUserForm} includeDepartment departments={departments} />
+              <Button type="submit" disabled={departments.length === 0} className="sm:col-span-2 w-full sm:w-auto">
+                Create user
+              </Button>
+            </form>
+            {orgUsers.length === 0 ? (
+              <p className="text-sm text-slate-500">No users yet.</p>
+            ) : (
+              <ul className="divide-y divide-slate-100 rounded-xl border border-slate-100 overflow-hidden">
+                {orgUsers.map((u) => (
+                  <li key={u.id} className="px-4 py-3.5 bg-white even:bg-slate-50/40">
+                    {editingUser === u.id ? (
+                      <div className="grid sm:grid-cols-2 gap-3">
+                        <ProfileFields
+                          form={editUserForm}
+                          onChange={setEditUserForm}
+                          includeDepartment
+                          departments={departments}
+                        />
+                        <div className="sm:col-span-2 flex gap-2">
+                          <Button size="sm" onClick={() => updateUser(u.id)}>Save</Button>
+                          <Button variant="secondary" size="sm" onClick={() => setEditingUser(null)}>Cancel</Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 text-sm">
+                        <div>
+                          <UserIdentity user={u} />
+                          <span className="text-slate-500 text-xs mt-1 block pl-[44px]">
+                            {u.department?.name || 'No department'}
+                          </span>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button variant="ghost" size="sm" onClick={() => startEditUser(u)}>Edit</Button>
+                          <ConfirmButton
+                            label="Delete"
+                            confirmMessage={`Delete user ${u.email}?`}
+                            onConfirm={() => deleteUser(u.id)}
+                            className="text-sm font-semibold text-red-600 hover:text-red-700 px-3 py-1.5"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>,
+          'Team members',
+          'Agents and reviewers who upload calls and view QA results.',
         )}
-      </section>
-      )}
     </div>
   )
 }

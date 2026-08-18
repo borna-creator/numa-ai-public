@@ -117,8 +117,8 @@ export default function CallTranscript({ transcript }) {
 
   return (
     <div>
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
-        <p className="text-sm font-medium text-slate-900">Transcript</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
+        <p className="text-sm font-semibold text-slate-900">Transcript</p>
         {legend.length > 1 && (
           <div className="flex flex-wrap gap-2">
             {legend.map(({ speakerKey, label, style }) => (
@@ -132,7 +132,7 @@ export default function CallTranscript({ transcript }) {
           </div>
         )}
       </div>
-      <div className="rounded-xl border border-slate-100 bg-white max-h-96 overflow-y-auto divide-y divide-slate-100">
+      <div className="rounded-2xl border border-slate-200 bg-white max-h-96 overflow-y-auto shadow-inner shadow-slate-900/[0.02] divide-y divide-slate-100">
         {turns.map((turn, index) => {
           const style = speakerStyles.get(turn.speakerKey)
           const timestamp = formatTranscriptTimestamp(turn.startSec)

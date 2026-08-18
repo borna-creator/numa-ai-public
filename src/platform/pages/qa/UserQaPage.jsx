@@ -1,5 +1,6 @@
 import { useAuth } from '../../context/AuthContext.jsx'
 import { getOrgApiBase } from '../../orgApi.js'
+import { Card, EmptyState, IconBuilding } from '../../components/ui.jsx'
 import CallsPanel from './CallsPanel.jsx'
 
 export default function UserQaPage() {
@@ -8,17 +9,15 @@ export default function UserQaPage() {
 
   if (!user?.organizationId) {
     return (
-      <div className="rounded-2xl border border-slate-200/80 bg-white p-8 text-center text-slate-600">
-        Your account is not assigned to an organization yet.
-      </div>
+      <Card>
+        <EmptyState
+          icon={IconBuilding}
+          title="No organization assigned"
+          description="Your account is not linked to an organization yet. Contact your administrator."
+        />
+      </Card>
     )
   }
 
-  return (
-    <CallsPanel
-      apiBase={apiBase}
-      userDepartmentId={user.departmentId}
-      currentUserId={user.id}
-    />
-  )
+  return <CallsPanel apiBase={apiBase} userDepartmentId={user.departmentId} currentUserId={user.id} />
 }
