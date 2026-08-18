@@ -22,12 +22,7 @@ export function initSuperTokens() {
           formFields: [{ id: 'email' }, { id: 'password' }],
         },
       }),
-      AccountLinking.init({
-        shouldDoAutomaticAccountLinking: async () => ({
-          shouldAutomaticallyLink: true,
-          shouldRequireVerification: false,
-        }),
-      }),
+      AccountLinking.init(),
       Session.init(),
     ],
   })

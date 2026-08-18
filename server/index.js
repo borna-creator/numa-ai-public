@@ -2,7 +2,7 @@ import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
 import multer from 'multer'
-import supertokens from 'supertokens-node'
+import supertokens, { Error as SuperTokensError } from 'supertokens-node'
 import { middleware, errorHandler } from 'supertokens-node/framework/express/index.js'
 import { initSuperTokens } from './supertokens.js'
 import { seedSupremeAdmin } from './services/users.js'
@@ -85,6 +85,9 @@ orgMemberRouter.use('/users', usersRouter)
 app.use('/api/org', orgMemberRouter)
 
 app.use((err, req, res, next) => {
+  if (req.path.startsWith('/auth') || SuperTokensError.isErrorFromSuperTokens(err)) {
+    return next(err)
+  }
   if (err instanceof multer.MulterError) {
     if (err.code === 'LIMIT_FILE_SIZE') {
       return res.status(413).json({ error: 'File too large' })
