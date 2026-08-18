@@ -1,6 +1,7 @@
 import { prisma } from '../db.js'
 import { createAudioAccessToken, createJobCallbackToken, getPublicApiBase } from './jobTokens.js'
 import { WORKER_CALLBACK_HEADER } from '../../shared/workerContract.js'
+import { normalizeSttSettings } from '../../shared/sttSettings.js'
 
 function getWorkerUrl() {
   return process.env.WORKER_URL?.replace(/\/$/, '') || null
@@ -33,6 +34,7 @@ export function buildJobPayload(job, call, dispatchedAt) {
       id: call.scorecard.id,
       name: call.scorecard.name,
       language: call.scorecard.language,
+      sttSettings: normalizeSttSettings(call.scorecard.sttSettings),
       criteria: call.scorecard.criteria.map((c) => ({
         id: c.id,
         label: c.label,

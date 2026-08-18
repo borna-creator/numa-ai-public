@@ -10,6 +10,10 @@ import {
   SCORECARD_LANGUAGES,
   getScorecardLanguageLabel,
 } from '../../../../shared/scorecardLanguages.js'
+import {
+  DEFAULT_STT_SETTINGS,
+  STT_SETTINGS_META,
+} from '../../../../shared/sttSettings.js'
 
 const emptyCriterion = () => ({
   label: '',
@@ -29,8 +33,10 @@ export default function ScorecardsPanel({ apiBase, canManage = false }) {
     description: '',
     language: DEFAULT_SCORECARD_LANGUAGE,
     isActive: true,
+    sttSettings: { ...DEFAULT_STT_SETTINGS },
     criteria: [emptyCriterion()],
   })
+  const [showSttSettings, setShowSttSettings] = useState(false)
 
   const load = async () => {
     try {
@@ -54,10 +60,12 @@ export default function ScorecardsPanel({ apiBase, canManage = false }) {
       description: '',
       language: DEFAULT_SCORECARD_LANGUAGE,
       isActive: true,
+      sttSettings: { ...DEFAULT_STT_SETTINGS },
       criteria: [emptyCriterion()],
     })
     setEditingId(null)
     setShowForm(false)
+    setShowSttSettings(false)
   }
 
   const startEdit = (scorecard) => {
@@ -68,6 +76,7 @@ export default function ScorecardsPanel({ apiBase, canManage = false }) {
       description: scorecard.description || '',
       language: scorecard.language || DEFAULT_SCORECARD_LANGUAGE,
       isActive: scorecard.isActive,
+      sttSettings: { ...DEFAULT_STT_SETTINGS, ...(scorecard.sttSettings || {}) },
       criteria: scorecard.criteria.map((c) => ({
         label: c.label,
         description: c.description || '',
@@ -86,6 +95,7 @@ export default function ScorecardsPanel({ apiBase, canManage = false }) {
         description: form.description,
         language: form.language,
         isActive: form.isActive,
+        sttSettings: form.sttSettings,
         criteria: form.criteria.filter((c) => c.label.trim()),
       }
 
@@ -123,6 +133,13 @@ export default function ScorecardsPanel({ apiBase, canManage = false }) {
     setForm((prev) => ({
       ...prev,
       criteria: prev.criteria.map((c, i) => (i === index ? { ...c, [field]: value } : c)),
+    }))
+  }
+
+  const updateSttSetting = (key, value) => {
+    setForm((prev) => ({
+      ...prev,
+      sttSettings: { ...prev.sttSettings, [key]: value },
     }))
   }
 
@@ -191,6 +208,39 @@ export default function ScorecardsPanel({ apiBase, canManage = false }) {
               onChange={(e) => setForm({ ...form, description: e.target.value })}
               className="sm:col-span-2 px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-numa-500/30 min-h-[80px]"
             />
+          </div>
+
+          <div className="rounded-xl border border-slate-200 overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setShowSttSettings((v) => !v)}
+              className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 text-sm font-medium text-slate-900 hover:bg-slate-100"
+            >
+              Speech-to-text (Deepgram Nova-3)
+              <span className="text-slate-500">{showSttSettings ? 'Hide' : 'Show'}</span>
+            </button>
+            {showSttSettings && (
+              <div className="p-4 grid sm:grid-cols-2 gap-3 border-t border-slate-200">
+                {STT_SETTINGS_META.map(({ key, label, description }) => (
+                  <label
+                    key={key}
+                    className="flex items-start gap-2 text-sm text-slate-700 p-2 rounded-lg hover:bg-slate-50"
+                    title={description}
+                  >
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={Boolean(form.sttSettings[key])}
+                      onChange={(e) => updateSttSetting(key, e.target.checked)}
+                    />
+                    <span>
+                      <span className="font-medium text-slate-900">{label}</span>
+                      <span className="block text-xs text-slate-500 mt-0.5">{description}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="space-y-3">

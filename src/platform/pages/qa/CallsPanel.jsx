@@ -4,6 +4,17 @@ import { CallStatusBadge } from '../../components/CallStatusBadge.jsx'
 import { getUserDisplayName } from '../../../../shared/userProfile.js'
 import { getCriterionQuestionTypeLabel } from '../../../../shared/criterionQuestionTypes.js'
 
+function getTranscriptMeta(transcript) {
+  const segments = transcript?.segments
+  if (!segments || Array.isArray(segments)) return null
+  return {
+    summary: segments.summary ?? null,
+    sentiment: segments.sentiment?.average ?? null,
+    sentimentScore: segments.sentiment?.sentiment_score ?? null,
+    speakerCount: Array.isArray(segments.speakers) ? segments.speakers.length : 0,
+  }
+}
+
 export default function CallsPanel({
   apiBase,
   canDeleteAny = false,
@@ -355,6 +366,30 @@ export default function CallsPanel({
                   </ul>
                 </div>
               )}
+
+              {(() => {
+                const meta = getTranscriptMeta(selectedCall.transcript)
+                if (!meta?.summary && !meta?.sentiment) return null
+                return (
+                  <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 space-y-2">
+                    {meta.summary && (
+                      <div>
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Summary</p>
+                        <p className="text-sm text-slate-700 mt-1 leading-relaxed">{meta.summary}</p>
+                      </div>
+                    )}
+                    {meta.sentiment && (
+                      <p className="text-xs text-slate-500">
+                        Overall sentiment:{' '}
+                        <span className="font-medium text-slate-700 capitalize">{meta.sentiment}</span>
+                        {meta.sentimentScore != null && (
+                          <span className="text-slate-400"> ({meta.sentimentScore.toFixed(2)})</span>
+                        )}
+                      </p>
+                    )}
+                  </div>
+                )
+              })()}
 
               {selectedCall.transcript?.fullText && (
                 <div>

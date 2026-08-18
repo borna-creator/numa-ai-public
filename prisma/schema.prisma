@@ -91,6 +91,7 @@ model Scorecard {
   name           String
   description    String?
   language       ScorecardLanguage    @default(ENGLISH)
+  sttSettings    Json?
   isActive       Boolean              @default(true)
   criteria       ScorecardCriterion[]
   calls          Call[]

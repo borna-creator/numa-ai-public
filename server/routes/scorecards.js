@@ -10,6 +10,7 @@ import {
   DEFAULT_SCORECARD_LANGUAGE,
   isValidScorecardLanguage,
 } from '../../shared/scorecardLanguages.js'
+import { normalizeSttSettings } from '../../shared/sttSettings.js'
 
 const router = Router({ mergeParams: true })
 
@@ -62,7 +63,7 @@ router.get('/', async (req, res, next) => {
 
 router.post('/', requireOrgAdminOrSuper, async (req, res, next) => {
   try {
-    const { name, description, language, isActive = true, criteria } = req.body
+    const { name, description, language, isActive = true, criteria, sttSettings } = req.body
 
     if (!name?.trim()) {
       return res.status(400).json({ error: 'Scorecard name is required' })
@@ -89,6 +90,7 @@ router.post('/', requireOrgAdminOrSuper, async (req, res, next) => {
         name: name.trim(),
         description: description?.trim() || null,
         language: scorecardLanguage,
+        sttSettings: normalizeSttSettings(sttSettings),
         isActive: Boolean(isActive),
         criteria: { create: parsedCriteria },
       },
@@ -113,7 +115,7 @@ router.patch('/:scorecardId', requireOrgAdminOrSuper, async (req, res, next) => 
       return res.status(404).json({ error: 'Scorecard not found' })
     }
 
-    const { name, description, language, isActive, criteria } = req.body
+    const { name, description, language, isActive, criteria, sttSettings } = req.body
     const data = {}
 
     if (name !== undefined) {
@@ -130,6 +132,7 @@ router.patch('/:scorecardId', requireOrgAdminOrSuper, async (req, res, next) => 
       data.language = language
     }
     if (isActive !== undefined) data.isActive = Boolean(isActive)
+    if (sttSettings !== undefined) data.sttSettings = normalizeSttSettings(sttSettings)
 
     let parsedCriteria
     if (criteria !== undefined) {
