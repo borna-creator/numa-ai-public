@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { api, formatFileSize, uploadFile, formatDateTime } from '../../api.js'
 import { CallStatusBadge } from '../../components/CallStatusBadge.jsx'
+import CallTranscript from '../../components/CallTranscript.jsx'
 import { getUserDisplayName } from '../../../../shared/userProfile.js'
 import { getCriterionQuestionTypeLabel } from '../../../../shared/criterionQuestionTypes.js'
 
@@ -411,14 +412,7 @@ export default function CallsPanel({
                 )
               })()}
 
-              {selectedCall.transcript?.fullText && (
-                <div>
-                  <p className="text-sm font-medium text-slate-900 mb-2">Transcript</p>
-                  <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm text-slate-700 whitespace-pre-wrap max-h-48 overflow-y-auto">
-                    {selectedCall.transcript.fullText}
-                  </div>
-                </div>
-              )}
+              {selectedCall.transcript && <CallTranscript transcript={selectedCall.transcript} />}
 
               {selectedCall.scorecard?.criteria?.length > 0 && !selectedCall.results?.length && (
                 <div>

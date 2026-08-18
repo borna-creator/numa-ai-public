@@ -216,7 +216,7 @@ export default function ScorecardsPanel({ apiBase, canManage = false }) {
               onClick={() => setShowSttSettings((v) => !v)}
               className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 text-sm font-medium text-slate-900 hover:bg-slate-100"
             >
-              Speech-to-text (Deepgram Nova-3)
+              Transcription options
               <span className="text-slate-500">{showSttSettings ? 'Hide' : 'Show'}</span>
             </button>
             {showSttSettings && (
