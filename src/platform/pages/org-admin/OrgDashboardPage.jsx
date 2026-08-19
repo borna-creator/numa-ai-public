@@ -10,7 +10,19 @@ import {
   CardHeader,
   Input,
   LoadingState,
+  Select,
 } from '../../components/ui.jsx'
+
+const RESET_DAY_OPTIONS = Array.from({ length: 28 }, (_, i) => i + 1)
+
+function ordinalDay(day) {
+  if (day >= 11 && day <= 13) return `${day}th`
+  const last = day % 10
+  if (last === 1) return `${day}st`
+  if (last === 2) return `${day}nd`
+  if (last === 3) return `${day}rd`
+  return `${day}th`
+}
 
 const emptyUserForm = () => ({
   fullName: '',
@@ -132,7 +144,13 @@ export default function OrgDashboardPage({
   const [users, setUsers] = useState([])
   const [deptName, setDeptName] = useState('')
   const [userForm, setUserForm] = useState(emptyUserForm())
-  const [orgForm, setOrgForm] = useState({ name: '', slug: '', usageMinutesCap: '' })
+  const [orgForm, setOrgForm] = useState({
+    name: '',
+    slug: '',
+    usageMinutesCap: '',
+    usageMinutesMonthlyCap: '',
+    usageResetDayOfMonth: '',
+  })
   const [editingDept, setEditingDept] = useState(null)
   const [editingUser, setEditingUser] = useState(null)
   const [editUserForm, setEditUserForm] = useState({ ...emptyUserForm(), passwordOptional: true })
@@ -158,6 +176,8 @@ export default function OrgDashboardPage({
           name: results[0].organization.name,
           slug: results[0].organization.slug,
           usageMinutesCap: results[0].organization.usageMinutesCap ?? '',
+          usageMinutesMonthlyCap: results[0].organization.usageMinutesMonthlyCap ?? '',
+          usageResetDayOfMonth: results[0].organization.usageResetDayOfMonth ?? '',
         })
         setDepartments(results[1].departments)
         setUsers(results[2].users)
@@ -191,6 +211,8 @@ export default function OrgDashboardPage({
           name: results[0].organization.name,
           slug: results[0].organization.slug,
           usageMinutesCap: results[0].organization.usageMinutesCap ?? '',
+          usageMinutesMonthlyCap: results[0].organization.usageMinutesMonthlyCap ?? '',
+          usageResetDayOfMonth: results[0].organization.usageResetDayOfMonth ?? '',
         })
           setDepartments(results[1].departments)
           setUsers(results[2].users)
@@ -300,6 +322,11 @@ export default function OrgDashboardPage({
   const updateOrganization = (e) => {
     e.preventDefault()
     runAndNotify(async () => {
+      const monthlyCap =
+        orgForm.usageMinutesMonthlyCap === '' || orgForm.usageMinutesMonthlyCap == null
+          ? null
+          : Number(orgForm.usageMinutesMonthlyCap)
+
       await api(`/api/organizations/${orgId}`, {
         method: 'PATCH',
         body: JSON.stringify({
@@ -309,6 +336,13 @@ export default function OrgDashboardPage({
             orgForm.usageMinutesCap === '' || orgForm.usageMinutesCap == null
               ? null
               : Number(orgForm.usageMinutesCap),
+          usageMinutesMonthlyCap: monthlyCap,
+          usageResetDayOfMonth:
+            monthlyCap == null
+              ? null
+              : orgForm.usageResetDayOfMonth === '' || orgForm.usageResetDayOfMonth == null
+                ? null
+                : Number(orgForm.usageResetDayOfMonth),
         }),
       })
     })
@@ -335,14 +369,22 @@ export default function OrgDashboardPage({
         sectionWrap(
           <>
             {organization && (
-              <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm">
+              <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm space-y-1">
                 <p className="font-semibold text-slate-900">Usage</p>
-                <p className="text-slate-600 mt-1">
-                  {organization.usageMinutesUsed ?? 0} minutes used
+                <p className="text-slate-600">
+                  Total: {organization.usageMinutesUsed ?? 0} minutes used
                   {organization.usageMinutesCap != null
                     ? ` · ${organization.usageMinutesCap} minute cap`
-                    : ' · No usage cap'}
+                    : ' · No total cap'}
                 </p>
+                {organization.usageMinutesMonthlyCap != null && (
+                  <p className="text-slate-600">
+                    This period: {organization.usageMonthlyMinutesUsed ?? 0} of{' '}
+                    {organization.usageMinutesMonthlyCap} monthly minutes
+                    {organization.usageResetDayOfMonth != null &&
+                      ` · Resets on the ${ordinalDay(organization.usageResetDayOfMonth)}`}
+                  </p>
+                )}
               </div>
             )}
             <form onSubmit={updateOrganization} className="grid sm:grid-cols-2 gap-4">
@@ -359,20 +401,43 @@ export default function OrgDashboardPage({
                 onChange={(e) => setOrgForm({ ...orgForm, slug: e.target.value })}
               />
               <Input
-                label="Usage cap (minutes)"
+                label="Total usage cap (minutes)"
                 type="number"
                 min={0}
                 placeholder="Unlimited"
-                hint="Leave empty for no limit. Uploads and scoring stop when the cap is reached."
+                hint="One-off lifetime allowance. Leave empty for no limit."
                 value={orgForm.usageMinutesCap}
                 onChange={(e) => setOrgForm({ ...orgForm, usageMinutesCap: e.target.value })}
-                className="sm:col-span-2"
               />
+              <Input
+                label="Monthly usage cap (minutes)"
+                type="number"
+                min={0}
+                placeholder="Unlimited"
+                hint="Resets each month on the day you choose below."
+                value={orgForm.usageMinutesMonthlyCap}
+                onChange={(e) => setOrgForm({ ...orgForm, usageMinutesMonthlyCap: e.target.value })}
+              />
+              <Select
+                label="Monthly reset day"
+                hint="Day of each month when the monthly allowance resets (1–28)."
+                value={orgForm.usageResetDayOfMonth}
+                onChange={(e) => setOrgForm({ ...orgForm, usageResetDayOfMonth: e.target.value })}
+                className="sm:col-span-2"
+                disabled={!orgForm.usageMinutesMonthlyCap}
+              >
+                <option value="">Select reset day…</option>
+                {RESET_DAY_OPTIONS.map((day) => (
+                  <option key={day} value={day}>
+                    {ordinalDay(day)} of each month
+                  </option>
+                ))}
+              </Select>
               <Button type="submit" className="sm:col-span-2 w-full sm:w-auto">Save organization</Button>
             </form>
           </>,
           'Organization settings',
-          'Update organization details and monthly usage limits.',
+          'Configure total and monthly usage limits for this organization.',
         )
       )}
 

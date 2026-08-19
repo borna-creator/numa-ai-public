@@ -42,6 +42,15 @@ function tagsToString(tags) {
   return Array.isArray(tags) ? tags.join(', ') : ''
 }
 
+function formatPeriodEnd(iso) {
+  if (!iso) return null
+  return new Date(iso).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+}
+
 function getTranscriptMeta(transcript) {
   const segments = transcript?.segments
   if (!segments || Array.isArray(segments)) return null
@@ -288,16 +297,33 @@ export default function CallsPanel({
 
       {canDeleteAny && usage && (
         <Alert variant={usage.atCap ? 'warning' : 'info'}>
-          <span className="font-semibold">{usage.minutesUsed} minutes used</span>
-          {usage.minutesCap != null ? (
-            <>
-              {' '}
-              of {usage.minutesCap} minute cap
-              {usage.minutesRemaining != null && ` (${usage.minutesRemaining} remaining)`}
-            </>
-          ) : (
-            ' · No usage cap configured'
-          )}
+          <div className="space-y-1">
+            <p>
+              <span className="font-semibold">Total:</span>{' '}
+              {usage.totalMinutesUsed ?? usage.minutesUsed} minutes used
+              {usage.totalMinutesCap != null ? (
+                <>
+                  {' '}
+                  of {usage.totalMinutesCap} cap
+                  {usage.totalMinutesRemaining != null &&
+                    ` (${usage.totalMinutesRemaining} remaining)`}
+                </>
+              ) : (
+                ' · No total cap'
+              )}
+            </p>
+            {usage.monthlyMinutesCap != null && (
+              <p>
+                <span className="font-semibold">This period:</span>{' '}
+                {usage.monthlyMinutesUsed ?? 0} of {usage.monthlyMinutesCap} minutes
+                {usage.monthlyMinutesRemaining != null &&
+                  ` (${usage.monthlyMinutesRemaining} remaining)`}
+                {usage.monthlyPeriodEnd && ` · Resets ${formatPeriodEnd(usage.monthlyPeriodEnd)}`}
+                {usage.usageResetDayOfMonth != null &&
+                  ` (day ${usage.usageResetDayOfMonth} each month)`}
+              </p>
+            )}
+          </div>
         </Alert>
       )}
 

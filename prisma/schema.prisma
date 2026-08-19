@@ -43,7 +43,9 @@ model Organization {
   id              String       @id @default(cuid())
   name            String
   slug            String       @unique
-  usageMinutesCap Int?
+  usageMinutesCap        Int?
+  usageMinutesMonthlyCap Int?
+  usageResetDayOfMonth   Int?
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
   departments     Department[]

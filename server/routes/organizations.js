@@ -3,29 +3,43 @@ import { prisma } from '../db.js'
 import { requireSession, loadAppUser, requireSuperAdmin } from '../middleware/auth.js'
 import { createAuthUser, slugify, deleteAuthUser, isAuthProvisioningError } from '../services/users.js'
 import { parseRequiredUserProfile } from '../../shared/userProfile.js'
-import { getOrgUsageMinutes } from '../services/usage.js'
+import { getOrgUsageSummary } from '../services/usage.js'
 
 const router = Router()
 const superAdmin = [requireSession, loadAppUser, requireSuperAdmin]
 
+function parseOptionalCap(value, fieldName) {
+  if (value === undefined) return undefined
+  if (value === null || value === '') return null
+  const cap = Number(value)
+  if (!Number.isFinite(cap) || cap < 0) {
+    return { error: `${fieldName} must be a non-negative number or null` }
+  }
+  return Math.round(cap)
+}
+
+function parseResetDay(value) {
+  if (value === undefined) return undefined
+  if (value === null || value === '') return null
+  const day = Number(value)
+  if (!Number.isInteger(day) || day < 1 || day > 28) {
+    return { error: 'usageResetDayOfMonth must be an integer between 1 and 28, or null' }
+  }
+  return day
+}
+
 async function attachUsageStats(organizations) {
-  const ids = organizations.map((o) => o.id)
-  if (ids.length === 0) return organizations
-
-  const grouped = await prisma.call.groupBy({
-    by: ['organizationId'],
-    where: { organizationId: { in: ids }, durationSec: { not: null } },
-    _sum: { durationSec: true },
-  })
-
-  const usedByOrg = new Map(
-    grouped.map((row) => [row.organizationId, Math.ceil((row._sum.durationSec ?? 0) / 60)]),
+  return Promise.all(
+    organizations.map(async (org) => {
+      const usage = await getOrgUsageSummary(org.id)
+      return {
+        ...org,
+        usageMinutesUsed: usage?.totalMinutesUsed ?? 0,
+        usageMonthlyMinutesUsed: usage?.monthlyMinutesUsed ?? null,
+        usageSummary: usage,
+      }
+    }),
   )
-
-  return organizations.map((org) => ({
-    ...org,
-    usageMinutesUsed: usedByOrg.get(org.id) ?? 0,
-  }))
 }
 
 router.get('/', ...superAdmin, async (_req, res, next) => {
@@ -135,8 +149,15 @@ router.get('/:orgId', ...superAdmin, async (req, res, next) => {
       return res.status(404).json({ error: 'Organization not found' })
     }
 
-    const usageMinutesUsed = await getOrgUsageMinutes(organization.id)
-    res.json({ organization: { ...organization, usageMinutesUsed } })
+    const usage = await getOrgUsageSummary(organization.id)
+    res.json({
+      organization: {
+        ...organization,
+        usageMinutesUsed: usage?.totalMinutesUsed ?? 0,
+        usageMonthlyMinutesUsed: usage?.monthlyMinutesUsed ?? null,
+        usageSummary: usage,
+      },
+    })
   } catch (err) {
     next(err)
   }
@@ -144,7 +165,7 @@ router.get('/:orgId', ...superAdmin, async (req, res, next) => {
 
 router.patch('/:orgId', ...superAdmin, async (req, res, next) => {
   try {
-    const { name, slug, usageMinutesCap } = req.body
+    const { name, slug, usageMinutesCap, usageMinutesMonthlyCap, usageResetDayOfMonth } = req.body
     const organization = await prisma.organization.findUnique({ where: { id: req.params.orgId } })
 
     if (!organization) {
@@ -173,15 +194,47 @@ router.patch('/:orgId', ...superAdmin, async (req, res, next) => {
     }
 
     if (usageMinutesCap !== undefined) {
-      if (usageMinutesCap === null || usageMinutesCap === '') {
-        data.usageMinutesCap = null
-      } else {
-        const cap = Number(usageMinutesCap)
-        if (!Number.isFinite(cap) || cap < 0) {
-          return res.status(400).json({ error: 'usageMinutesCap must be a non-negative number or null' })
-        }
-        data.usageMinutesCap = Math.round(cap)
+      const parsed = parseOptionalCap(usageMinutesCap, 'usageMinutesCap')
+      if (typeof parsed === 'object' && parsed?.error) {
+        return res.status(400).json({ error: parsed.error })
       }
+      data.usageMinutesCap = parsed
+    }
+
+    if (usageMinutesMonthlyCap !== undefined) {
+      const parsed = parseOptionalCap(usageMinutesMonthlyCap, 'usageMinutesMonthlyCap')
+      if (typeof parsed === 'object' && parsed?.error) {
+        return res.status(400).json({ error: parsed.error })
+      }
+      data.usageMinutesMonthlyCap = parsed
+    }
+
+    if (usageResetDayOfMonth !== undefined) {
+      const parsed = parseResetDay(usageResetDayOfMonth)
+      if (typeof parsed === 'object' && parsed?.error) {
+        return res.status(400).json({ error: parsed.error })
+      }
+      data.usageResetDayOfMonth = parsed
+    }
+
+    const nextMonthlyCap =
+      data.usageMinutesMonthlyCap !== undefined
+        ? data.usageMinutesMonthlyCap
+        : organization.usageMinutesMonthlyCap
+    const nextResetDay =
+      data.usageResetDayOfMonth !== undefined
+        ? data.usageResetDayOfMonth
+        : organization.usageResetDayOfMonth
+
+    if (nextMonthlyCap != null && nextResetDay == null) {
+      return res.status(400).json({
+        error: 'usageResetDayOfMonth is required when a monthly usage cap is set',
+      })
+    }
+    if (nextResetDay != null && nextMonthlyCap == null) {
+      return res.status(400).json({
+        error: 'usageMinutesMonthlyCap is required when a monthly reset day is set',
+      })
     }
 
     if (Object.keys(data).length === 0) {
@@ -200,8 +253,15 @@ router.patch('/:orgId', ...superAdmin, async (req, res, next) => {
       },
     })
 
-    const usageMinutesUsed = await getOrgUsageMinutes(updated.id)
-    res.json({ organization: { ...updated, usageMinutesUsed } })
+    const usage = await getOrgUsageSummary(updated.id)
+    res.json({
+      organization: {
+        ...updated,
+        usageMinutesUsed: usage?.totalMinutesUsed ?? 0,
+        usageMonthlyMinutesUsed: usage?.monthlyMinutesUsed ?? null,
+        usageSummary: usage,
+      },
+    })
   } catch (err) {
     next(err)
   }
