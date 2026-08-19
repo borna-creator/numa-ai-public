@@ -70,7 +70,7 @@ router.post('/jobs/:jobId/complete', requireWorkerSecret, async (req, res, next)
       return res.json({ ok: true, duplicate: true })
     }
 
-    const { status, transcript, results, errorMessage } = req.body
+    const { status, transcript, results, errorMessage, durationSec } = req.body
 
     if (status === 'FAILED') {
       await prisma.$transaction([
@@ -150,6 +150,9 @@ router.post('/jobs/:jobId/complete', requireWorkerSecret, async (req, res, next)
           status: 'COMPLETED',
           errorMessage: null,
           overallScore,
+          ...(durationSec != null && Number(durationSec) > 0
+            ? { durationSec: Math.round(Number(durationSec)) }
+            : {}),
         },
       })
     })

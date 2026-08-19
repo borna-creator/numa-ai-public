@@ -40,15 +40,16 @@ enum ProcessingJobStatus {
 }
 
 model Organization {
-  id          String       @id @default(cuid())
-  name        String
-  slug        String       @unique
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  departments Department[]
-  users       User[]
-  scorecards  Scorecard[]
-  calls       Call[]
+  id              String       @id @default(cuid())
+  name            String
+  slug            String       @unique
+  usageMinutesCap Int?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  departments     Department[]
+  users           User[]
+  scorecards      Scorecard[]
+  calls           Call[]
 }
 
 model Department {
@@ -133,6 +134,7 @@ model Call {
   fileSize       Int
   storagePath    String
   durationSec    Int?
+  tags           String[]              @default([])
   status         CallStatus            @default(PENDING)
   errorMessage   String?
   overallScore   Int?
@@ -147,6 +149,7 @@ model Call {
   @@index([uploadedById])
   @@index([scorecardId])
   @@index([status])
+  @@index([createdAt])
 }
 
 model CallTranscript {

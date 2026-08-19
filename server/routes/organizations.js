@@ -3,9 +3,30 @@ import { prisma } from '../db.js'
 import { requireSession, loadAppUser, requireSuperAdmin } from '../middleware/auth.js'
 import { createAuthUser, slugify, deleteAuthUser, isAuthProvisioningError } from '../services/users.js'
 import { parseRequiredUserProfile } from '../../shared/userProfile.js'
+import { getOrgUsageMinutes } from '../services/usage.js'
 
 const router = Router()
 const superAdmin = [requireSession, loadAppUser, requireSuperAdmin]
+
+async function attachUsageStats(organizations) {
+  const ids = organizations.map((o) => o.id)
+  if (ids.length === 0) return organizations
+
+  const grouped = await prisma.call.groupBy({
+    by: ['organizationId'],
+    where: { organizationId: { in: ids }, durationSec: { not: null } },
+    _sum: { durationSec: true },
+  })
+
+  const usedByOrg = new Map(
+    grouped.map((row) => [row.organizationId, Math.ceil((row._sum.durationSec ?? 0) / 60)]),
+  )
+
+  return organizations.map((org) => ({
+    ...org,
+    usageMinutesUsed: usedByOrg.get(org.id) ?? 0,
+  }))
+}
 
 router.get('/', ...superAdmin, async (_req, res, next) => {
   try {
@@ -19,7 +40,7 @@ router.get('/', ...superAdmin, async (_req, res, next) => {
         },
       },
     })
-    res.json({ organizations })
+    res.json({ organizations: await attachUsageStats(organizations) })
   } catch (err) {
     next(err)
   }
@@ -114,7 +135,8 @@ router.get('/:orgId', ...superAdmin, async (req, res, next) => {
       return res.status(404).json({ error: 'Organization not found' })
     }
 
-    res.json({ organization })
+    const usageMinutesUsed = await getOrgUsageMinutes(organization.id)
+    res.json({ organization: { ...organization, usageMinutesUsed } })
   } catch (err) {
     next(err)
   }
@@ -122,7 +144,7 @@ router.get('/:orgId', ...superAdmin, async (req, res, next) => {
 
 router.patch('/:orgId', ...superAdmin, async (req, res, next) => {
   try {
-    const { name, slug } = req.body
+    const { name, slug, usageMinutesCap } = req.body
     const organization = await prisma.organization.findUnique({ where: { id: req.params.orgId } })
 
     if (!organization) {
@@ -150,6 +172,18 @@ router.patch('/:orgId', ...superAdmin, async (req, res, next) => {
       data.slug = orgSlug
     }
 
+    if (usageMinutesCap !== undefined) {
+      if (usageMinutesCap === null || usageMinutesCap === '') {
+        data.usageMinutesCap = null
+      } else {
+        const cap = Number(usageMinutesCap)
+        if (!Number.isFinite(cap) || cap < 0) {
+          return res.status(400).json({ error: 'usageMinutesCap must be a non-negative number or null' })
+        }
+        data.usageMinutesCap = Math.round(cap)
+      }
+    }
+
     if (Object.keys(data).length === 0) {
       return res.status(400).json({ error: 'No fields to update' })
     }
@@ -166,7 +200,8 @@ router.patch('/:orgId', ...superAdmin, async (req, res, next) => {
       },
     })
 
-    res.json({ organization: updated })
+    const usageMinutesUsed = await getOrgUsageMinutes(updated.id)
+    res.json({ organization: { ...updated, usageMinutesUsed } })
   } catch (err) {
     next(err)
   }

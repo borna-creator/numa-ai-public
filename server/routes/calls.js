@@ -10,6 +10,7 @@ import {
   getUploadTmpDir,
 } from '../services/storage.js'
 import { startCallProcessing } from '../services/workerDispatch.js'
+import { assertOrgWithinUsageCap, getOrgUsageSummary } from '../services/usage.js'
 
 const router = Router({ mergeParams: true })
 
@@ -57,6 +58,32 @@ const callInclude = {
   },
 }
 
+function normalizeTags(input) {
+  if (input == null || input === '') return []
+
+  let raw = input
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed)) raw = parsed
+    } catch {
+      raw = raw.split(',')
+    }
+  }
+
+  if (!Array.isArray(raw)) return []
+
+  const seen = new Set()
+  const tags = []
+  for (const item of raw) {
+    const tag = String(item).trim().toLowerCase()
+    if (!tag || seen.has(tag) || tags.length >= 20) continue
+    seen.add(tag)
+    tags.push(tag)
+  }
+  return tags
+}
+
 function callVisibilityFilter(req) {
   if (req.appUser.role === 'ORG_ADMIN' || req.appUser.role === 'SUPER_ADMIN') {
     return { organizationId: req.organizationId }
@@ -71,14 +98,75 @@ function callVisibilityFilter(req) {
   }
 }
 
+function buildCallListWhere(req) {
+  const base = callVisibilityFilter(req)
+  const { q, departmentId, uploadedById, dateFrom, dateTo, tag } = req.query
+  const clauses = [base]
+
+  if (departmentId) {
+    clauses.push({ departmentId: String(departmentId) })
+  }
+
+  if (uploadedById) {
+    clauses.push({ uploadedById: String(uploadedById) })
+  }
+
+  if (tag?.trim()) {
+    clauses.push({ tags: { has: String(tag).trim().toLowerCase() } })
+  }
+
+  if (dateFrom || dateTo) {
+    const createdAt = {}
+    if (dateFrom) {
+      const start = new Date(String(dateFrom))
+      if (!Number.isNaN(start.getTime())) createdAt.gte = start
+    }
+    if (dateTo) {
+      const end = new Date(String(dateTo))
+      if (!Number.isNaN(end.getTime())) {
+        end.setHours(23, 59, 59, 999)
+        createdAt.lte = end
+      }
+    }
+    if (Object.keys(createdAt).length > 0) {
+      clauses.push({ createdAt })
+    }
+  }
+
+  if (q?.trim()) {
+    const term = String(q).trim()
+    clauses.push({
+      OR: [
+        { originalName: { contains: term, mode: 'insensitive' } },
+        { tags: { has: term.toLowerCase() } },
+        { uploadedBy: { fullName: { contains: term, mode: 'insensitive' } } },
+        { uploadedBy: { email: { contains: term, mode: 'insensitive' } } },
+        { department: { name: { contains: term, mode: 'insensitive' } } },
+      ],
+    })
+  }
+
+  return clauses.length === 1 ? base : { AND: clauses }
+}
+
+function isOrgAdmin(req) {
+  return req.appUser.role === 'SUPER_ADMIN' || req.appUser.role === 'ORG_ADMIN'
+}
+
 router.get('/', async (req, res, next) => {
   try {
     const calls = await prisma.call.findMany({
-      where: callVisibilityFilter(req),
+      where: buildCallListWhere(req),
       orderBy: { createdAt: 'desc' },
       include: callInclude,
     })
-    res.json({ calls })
+
+    const payload = { calls }
+    if (isOrgAdmin(req)) {
+      payload.usage = await getOrgUsageSummary(req.organizationId)
+    }
+
+    res.json(payload)
   } catch (err) {
     next(err)
   }
@@ -121,6 +209,8 @@ router.get('/:callId', async (req, res, next) => {
 })
 
 async function resolveUploadContext(req, { scorecardId, departmentId }) {
+  await assertOrgWithinUsageCap(req.organizationId)
+
   if (scorecardId) {
     const scorecard = await prisma.scorecard.findFirst({
       where: { id: scorecardId, organizationId: req.organizationId, isActive: true },
@@ -153,7 +243,7 @@ async function resolveUploadContext(req, { scorecardId, departmentId }) {
   return { scorecardId: scorecardId || null, resolvedDepartmentId }
 }
 
-async function createCallFromFile(req, file, { scorecardId, resolvedDepartmentId }) {
+async function createCallFromFile(req, file, { scorecardId, resolvedDepartmentId, tags }) {
   const call = await prisma.call.create({
     data: {
       organizationId: req.organizationId,
@@ -164,6 +254,7 @@ async function createCallFromFile(req, file, { scorecardId, resolvedDepartmentId
       mimeType: file.mimetype,
       fileSize: file.size,
       storagePath: 'pending',
+      tags,
       status: 'PENDING',
     },
   })
@@ -202,15 +293,16 @@ router.post('/', upload.array('audio', maxBatchFiles), async (req, res, next) =>
       return res.status(400).json({ error: 'At least one audio file is required' })
     }
 
-    const { scorecardId, departmentId } = req.body
+    const { scorecardId, departmentId, tags: tagsInput } = req.body
     const context = await resolveUploadContext(req, { scorecardId, departmentId })
+    const tags = normalizeTags(tagsInput)
 
     const calls = []
     const errors = []
 
     for (const file of files) {
       try {
-        const call = await createCallFromFile(req, file, context)
+        const call = await createCallFromFile(req, file, { ...context, tags })
         calls.push(call)
       } catch (err) {
         errors.push({ fileName: file.originalname, error: err.message })
@@ -234,6 +326,39 @@ router.post('/', upload.array('audio', maxBatchFiles), async (req, res, next) =>
   }
 })
 
+router.patch('/:callId', async (req, res, next) => {
+  try {
+    const call = await prisma.call.findFirst({
+      where: { id: req.params.callId, ...callVisibilityFilter(req) },
+    })
+
+    if (!call) {
+      return res.status(404).json({ error: 'Call not found' })
+    }
+
+    const canEdit =
+      isOrgAdmin(req) || call.uploadedById === req.appUser.id
+
+    if (!canEdit) {
+      return res.status(403).json({ error: 'Insufficient permissions' })
+    }
+
+    if (req.body.tags === undefined) {
+      return res.status(400).json({ error: 'tags field is required' })
+    }
+
+    const updated = await prisma.call.update({
+      where: { id: call.id },
+      data: { tags: normalizeTags(req.body.tags) },
+      include: callInclude,
+    })
+
+    res.json({ call: updated })
+  } catch (err) {
+    next(err)
+  }
+})
+
 router.post('/:callId/process', async (req, res, next) => {
   try {
     const call = await prisma.call.findFirst({
@@ -252,6 +377,7 @@ router.post('/:callId/process', async (req, res, next) => {
       return res.status(400).json({ error: 'Assign a scorecard before processing' })
     }
 
+    await assertOrgWithinUsageCap(req.organizationId)
     await startCallProcessing(call.id)
 
     const refreshed = await prisma.call.findFirst({
@@ -280,6 +406,9 @@ router.post('/:callId/process', async (req, res, next) => {
 
     res.json({ call: refreshed })
   } catch (err) {
+    if (err.status) {
+      return res.status(err.status).json({ error: err.message })
+    }
     next(err)
   }
 })
@@ -312,13 +441,8 @@ router.delete('/:callId', async (req, res, next) => {
       return res.status(404).json({ error: 'Call not found' })
     }
 
-    const canDelete =
-      req.appUser.role === 'SUPER_ADMIN' ||
-      req.appUser.role === 'ORG_ADMIN' ||
-      call.uploadedById === req.appUser.id
-
-    if (!canDelete) {
-      return res.status(403).json({ error: 'Insufficient permissions' })
+    if (!isOrgAdmin(req)) {
+      return res.status(403).json({ error: 'Only administrators can delete calls' })
     }
 
     await deleteCallFiles(call.storagePath)

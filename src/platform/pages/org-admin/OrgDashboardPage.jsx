@@ -132,7 +132,7 @@ export default function OrgDashboardPage({
   const [users, setUsers] = useState([])
   const [deptName, setDeptName] = useState('')
   const [userForm, setUserForm] = useState(emptyUserForm())
-  const [orgForm, setOrgForm] = useState({ name: '', slug: '' })
+  const [orgForm, setOrgForm] = useState({ name: '', slug: '', usageMinutesCap: '' })
   const [editingDept, setEditingDept] = useState(null)
   const [editingUser, setEditingUser] = useState(null)
   const [editUserForm, setEditUserForm] = useState({ ...emptyUserForm(), passwordOptional: true })
@@ -154,7 +154,11 @@ export default function OrgDashboardPage({
 
       if (isSuperAdmin) {
         setOrganization(results[0].organization)
-        setOrgForm({ name: results[0].organization.name, slug: results[0].organization.slug })
+        setOrgForm({
+          name: results[0].organization.name,
+          slug: results[0].organization.slug,
+          usageMinutesCap: results[0].organization.usageMinutesCap ?? '',
+        })
         setDepartments(results[1].departments)
         setUsers(results[2].users)
       } else {
@@ -183,7 +187,11 @@ export default function OrgDashboardPage({
 
         if (isSuperAdmin) {
           setOrganization(results[0].organization)
-          setOrgForm({ name: results[0].organization.name, slug: results[0].organization.slug })
+          setOrgForm({
+          name: results[0].organization.name,
+          slug: results[0].organization.slug,
+          usageMinutesCap: results[0].organization.usageMinutesCap ?? '',
+        })
           setDepartments(results[1].departments)
           setUsers(results[2].users)
         } else {
@@ -294,7 +302,14 @@ export default function OrgDashboardPage({
     runAndNotify(async () => {
       await api(`/api/organizations/${orgId}`, {
         method: 'PATCH',
-        body: JSON.stringify(orgForm),
+        body: JSON.stringify({
+          name: orgForm.name,
+          slug: orgForm.slug,
+          usageMinutesCap:
+            orgForm.usageMinutesCap === '' || orgForm.usageMinutesCap == null
+              ? null
+              : Number(orgForm.usageMinutesCap),
+        }),
       })
     })
   }
@@ -318,23 +333,46 @@ export default function OrgDashboardPage({
 
       {isSuperAdmin && showOrganization && organization && (
         sectionWrap(
-          <form onSubmit={updateOrganization} className="grid sm:grid-cols-2 gap-4">
-            <Input
-              placeholder="Organization name"
-              required
-              value={orgForm.name}
-              onChange={(e) => setOrgForm({ ...orgForm, name: e.target.value })}
-            />
-            <Input
-              placeholder="Slug"
-              required
-              value={orgForm.slug}
-              onChange={(e) => setOrgForm({ ...orgForm, slug: e.target.value })}
-            />
-            <Button type="submit" className="sm:col-span-2 w-full sm:w-auto">Save organization</Button>
-          </form>,
+          <>
+            {organization && (
+              <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm">
+                <p className="font-semibold text-slate-900">Usage</p>
+                <p className="text-slate-600 mt-1">
+                  {organization.usageMinutesUsed ?? 0} minutes used
+                  {organization.usageMinutesCap != null
+                    ? ` · ${organization.usageMinutesCap} minute cap`
+                    : ' · No usage cap'}
+                </p>
+              </div>
+            )}
+            <form onSubmit={updateOrganization} className="grid sm:grid-cols-2 gap-4">
+              <Input
+                placeholder="Organization name"
+                required
+                value={orgForm.name}
+                onChange={(e) => setOrgForm({ ...orgForm, name: e.target.value })}
+              />
+              <Input
+                placeholder="Slug"
+                required
+                value={orgForm.slug}
+                onChange={(e) => setOrgForm({ ...orgForm, slug: e.target.value })}
+              />
+              <Input
+                label="Usage cap (minutes)"
+                type="number"
+                min={0}
+                placeholder="Unlimited"
+                hint="Leave empty for no limit. Uploads and scoring stop when the cap is reached."
+                value={orgForm.usageMinutesCap}
+                onChange={(e) => setOrgForm({ ...orgForm, usageMinutesCap: e.target.value })}
+                className="sm:col-span-2"
+              />
+              <Button type="submit" className="sm:col-span-2 w-full sm:w-auto">Save organization</Button>
+            </form>
+          </>,
           'Organization settings',
-          'Update the display name and URL slug for this organization.',
+          'Update organization details and monthly usage limits.',
         )
       )}
 

@@ -10,6 +10,7 @@ import {
   EmptyState,
   IconPhone,
   IconUpload,
+  Input,
   LoadingState,
   ScoreRing,
   Select,
@@ -17,6 +18,29 @@ import {
 } from '../../components/ui.jsx'
 import { getUserDisplayName } from '../../../../shared/userProfile.js'
 import { getCriterionQuestionTypeLabel } from '../../../../shared/criterionQuestionTypes.js'
+
+function buildCallsQuery(filters) {
+  const params = new URLSearchParams()
+  if (filters.q?.trim()) params.set('q', filters.q.trim())
+  if (filters.departmentId) params.set('departmentId', filters.departmentId)
+  if (filters.uploadedById) params.set('uploadedById', filters.uploadedById)
+  if (filters.dateFrom) params.set('dateFrom', filters.dateFrom)
+  if (filters.dateTo) params.set('dateTo', filters.dateTo)
+  if (filters.tag?.trim()) params.set('tag', filters.tag.trim())
+  const qs = params.toString()
+  return qs ? `?${qs}` : ''
+}
+
+function formatDuration(sec) {
+  if (sec == null || sec <= 0) return null
+  const mins = Math.floor(sec / 60)
+  const secs = sec % 60
+  return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`
+}
+
+function tagsToString(tags) {
+  return Array.isArray(tags) ? tags.join(', ') : ''
+}
 
 function getTranscriptMeta(transcript) {
   const segments = transcript?.segments
@@ -68,21 +92,39 @@ export default function CallsPanel({
     scorecardId: '',
     departmentId: userDepartmentId || '',
     files: [],
+    tags: '',
   })
+  const [filters, setFilters] = useState({
+    q: '',
+    departmentId: '',
+    uploadedById: '',
+    dateFrom: '',
+    dateTo: '',
+    tag: '',
+  })
+  const [usage, setUsage] = useState(null)
+  const [users, setUsers] = useState([])
+  const [editTags, setEditTags] = useState('')
+  const [savingTags, setSavingTags] = useState(false)
 
   const load = async (showSpinner = true) => {
     try {
       if (showSpinner) setLoading(true)
-      const [callsData, scorecardsData, deptData] = await Promise.all([
-        api(`${apiBase}/calls`),
+      const callsUrl = `${apiBase}/calls${buildCallsQuery(filters)}`
+      const requests = [
+        api(callsUrl),
         api(`${apiBase}/scorecards`),
         canDeleteAny
           ? api(`${apiBase}/departments`)
           : Promise.resolve({ departments: [] }),
-      ])
+        canDeleteAny ? api(`${apiBase}/users`) : Promise.resolve({ users: [] }),
+      ]
+      const [callsData, scorecardsData, deptData, usersData] = await Promise.all(requests)
       setCalls(callsData.calls)
+      setUsage(callsData.usage ?? null)
       setScorecards(scorecardsData.scorecards.filter((s) => s.isActive))
       setDepartments(deptData.departments)
+      if (canDeleteAny) setUsers(usersData.users)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -104,6 +146,19 @@ export default function CallsPanel({
   useEffect(() => {
     load()
   }, [apiBase])
+
+  useEffect(() => {
+    const timer = setTimeout(() => load(false), 350)
+    return () => clearTimeout(timer)
+  }, [filters, apiBase])
+
+  useEffect(() => {
+    if (selectedCall) {
+      setEditTags(tagsToString(selectedCall.tags))
+    } else {
+      setEditTags('')
+    }
+  }, [selectedCall?.id, selectedCall?.tags])
 
   useEffect(() => {
     if (!selectedCallId) {
@@ -144,6 +199,7 @@ export default function CallsPanel({
       }
       if (uploadForm.scorecardId) formData.append('scorecardId', uploadForm.scorecardId)
       if (uploadForm.departmentId) formData.append('departmentId', uploadForm.departmentId)
+      if (uploadForm.tags.trim()) formData.append('tags', uploadForm.tags.trim())
 
       const data = await uploadFile(`${apiBase}/calls`, formData)
       const uploaded = data.calls ?? (data.call ? [data.call] : [])
@@ -153,7 +209,7 @@ export default function CallsPanel({
         setError(`Some files failed: ${failedNames}`)
       }
 
-      setUploadForm({ scorecardId: '', departmentId: userDepartmentId || '', files: [] })
+      setUploadForm({ scorecardId: '', departmentId: userDepartmentId || '', files: [], tags: '' })
       e.target.reset()
       await load()
       if (uploaded.length > 0) setSelectedCallId(uploaded[0].id)
@@ -176,6 +232,24 @@ export default function CallsPanel({
       setError(err.message)
     } finally {
       setProcessing(false)
+    }
+  }
+
+  const handleSaveTags = async () => {
+    if (!selectedCall) return
+    setSavingTags(true)
+    setError('')
+    try {
+      const data = await api(`${apiBase}/calls/${selectedCall.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ tags: editTags.split(',').map((t) => t.trim()).filter(Boolean) }),
+      })
+      setSelectedCall(data.call)
+      setCalls((prev) => prev.map((c) => (c.id === data.call.id ? { ...c, ...data.call } : c)))
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSavingTags(false)
     }
   }
 
@@ -211,6 +285,95 @@ export default function CallsPanel({
   return (
     <div className="space-y-6">
       {error && <Alert variant="error">{error}</Alert>}
+
+      {canDeleteAny && usage && (
+        <Alert variant={usage.atCap ? 'warning' : 'info'}>
+          <span className="font-semibold">{usage.minutesUsed} minutes used</span>
+          {usage.minutesCap != null ? (
+            <>
+              {' '}
+              of {usage.minutesCap} minute cap
+              {usage.minutesRemaining != null && ` (${usage.minutesRemaining} remaining)`}
+            </>
+          ) : (
+            ' · No usage cap configured'
+          )}
+        </Alert>
+      )}
+
+      <Card>
+        <CardHeader title="Search calls" description="Filter by text, date, person, department, or tag." />
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <Input
+            label="Search"
+            placeholder="Name, person, department, tag…"
+            value={filters.q}
+            onChange={(e) => setFilters({ ...filters, q: e.target.value })}
+          />
+          <Input
+            label="Tag"
+            placeholder="e.g. escalation"
+            value={filters.tag}
+            onChange={(e) => setFilters({ ...filters, tag: e.target.value })}
+          />
+          {canDeleteAny && (
+            <>
+              <Select
+                label="Department"
+                value={filters.departmentId}
+                onChange={(e) => setFilters({ ...filters, departmentId: e.target.value })}
+              >
+                <option value="">All departments</option>
+                {departments.map((d) => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+              </Select>
+              <Select
+                label="Uploaded by"
+                value={filters.uploadedById}
+                onChange={(e) => setFilters({ ...filters, uploadedById: e.target.value })}
+              >
+                <option value="">All people</option>
+                {users.map((u) => (
+                  <option key={u.id} value={u.id}>{getUserDisplayName(u)}</option>
+                ))}
+              </Select>
+            </>
+          )}
+          <Input
+            label="From date"
+            type="date"
+            value={filters.dateFrom}
+            onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
+          />
+          <Input
+            label="To date"
+            type="date"
+            value={filters.dateTo}
+            onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
+          />
+        </div>
+        {(filters.q || filters.tag || filters.departmentId || filters.uploadedById || filters.dateFrom || filters.dateTo) && (
+          <div className="mt-4">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() =>
+                setFilters({
+                  q: '',
+                  departmentId: '',
+                  uploadedById: '',
+                  dateFrom: '',
+                  dateTo: '',
+                  tag: '',
+                })
+              }
+            >
+              Clear filters
+            </Button>
+          </div>
+        )}
+      </Card>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard label="Total calls" value={calls.length} tone="default" />
@@ -251,7 +414,16 @@ export default function CallsPanel({
             )}
           </div>
 
-          <label className="block cursor-pointer group">
+          <Input
+            label="Tags"
+            placeholder="Comma-separated, e.g. sales, follow-up"
+            hint="Optional labels to organize and search calls later."
+            className="sm:col-span-2"
+            value={uploadForm.tags}
+            onChange={(e) => setUploadForm({ ...uploadForm, tags: e.target.value })}
+          />
+
+          <label className="block cursor-pointer group sm:col-span-2">
             <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/50 px-6 py-10 text-center transition-colors group-hover:border-numa-300 group-hover:bg-numa-50/30">
               <div className="w-12 h-12 rounded-2xl bg-white border border-slate-200 text-numa-600 flex items-center justify-center mx-auto mb-3 shadow-sm">
                 <IconUpload />
@@ -327,7 +499,20 @@ export default function CallsPanel({
                           <p className="text-xs text-slate-500 mt-1 truncate">
                             {call.scorecard?.name || 'No scorecard'}
                             {call.department?.name ? ` · ${call.department.name}` : ''}
+                            {formatDuration(call.durationSec) ? ` · ${formatDuration(call.durationSec)}` : ''}
                           </p>
+                          {call.tags?.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1.5">
+                              {call.tags.map((tag) => (
+                                <span
+                                  key={tag}
+                                  className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600"
+                                >
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </div>
                         <div className="flex flex-col items-end gap-2 shrink-0">
                           <CallStatusBadge status={call.status} />
@@ -384,6 +569,36 @@ export default function CallsPanel({
                     <p className="text-sm font-medium text-slate-900 mt-0.5 truncate" title={value}>{value}</p>
                   </div>
                 ))}
+              </div>
+
+              {formatDuration(selectedCall.durationSec) && (
+                <p className="text-xs text-slate-500">
+                  Duration: <span className="font-medium text-slate-700">{formatDuration(selectedCall.durationSec)}</span>
+                </p>
+              )}
+
+              <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4 space-y-3">
+                <Input
+                  label="Tags"
+                  placeholder="Comma-separated tags"
+                  value={editTags}
+                  onChange={(e) => setEditTags(e.target.value)}
+                />
+                {selectedCall.tags?.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {selectedCall.tags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="text-xs font-medium px-2 py-0.5 rounded-full bg-white border border-slate-200 text-slate-700"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <Button size="sm" onClick={handleSaveTags} disabled={savingTags}>
+                  {savingTags ? 'Saving…' : 'Save tags'}
+                </Button>
               </div>
 
               {selectedCall.results?.length > 0 && (
@@ -467,7 +682,7 @@ export default function CallsPanel({
                         : 'Start scoring'}
                   </Button>
                 )}
-                {(canDeleteAny || selectedCall.uploadedBy.id === currentUserId) && (
+                {canDeleteAny && (
                   <Button variant="danger" onClick={() => handleDelete(selectedCall)}>
                     Delete call
                   </Button>
