@@ -3,7 +3,7 @@ import { prisma } from '../db.js'
 import { verifyAudioAccessToken, verifyWorkerSecret, verifyJobCallbackToken } from '../services/jobTokens.js'
 import { createCallReadStream } from '../services/storage.js'
 import { computeOverallScore, normalizeCallbackResults } from '../services/scoring.js'
-import { WORKER_CALLBACK_HEADER } from '../../shared/workerContract.js'
+import { sanitizeUserFacingError } from '../../shared/userFacingErrors.js'
 
 const router = Router()
 
@@ -86,7 +86,10 @@ router.post('/jobs/:jobId/complete', requireWorkerSecret, async (req, res, next)
           where: { id: job.callId },
           data: {
             status: 'FAILED',
-            errorMessage: errorMessage?.trim() || 'Processing failed',
+            errorMessage: sanitizeUserFacingError(
+              errorMessage?.trim() || 'Processing failed',
+              'processing',
+            ),
           },
         }),
       ])

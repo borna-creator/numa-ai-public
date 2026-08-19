@@ -11,6 +11,7 @@ import {
 } from '../services/storage.js'
 import { startCallProcessing } from '../services/workerDispatch.js'
 import { assertOrgWithinUsageCap, getOrgUsageSummary } from '../services/usage.js'
+import { sanitizeUserFacingError } from '../../shared/userFacingErrors.js'
 
 const router = Router({ mergeParams: true })
 
@@ -305,7 +306,10 @@ router.post('/', upload.array('audio', maxBatchFiles), async (req, res, next) =>
         const call = await createCallFromFile(req, file, { ...context, tags })
         calls.push(call)
       } catch (err) {
-        errors.push({ fileName: file.originalname, error: err.message })
+        errors.push({
+          fileName: file.originalname,
+          error: sanitizeUserFacingError(err.message, 'upload'),
+        })
       }
     }
 

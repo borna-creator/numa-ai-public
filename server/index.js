@@ -13,6 +13,8 @@ import departmentsRouter from './routes/departments.js'
 import usersRouter from './routes/users.js'
 import scorecardsRouter from './routes/scorecards.js'
 import callsRouter from './routes/calls.js'
+import orgUsageRouter from './routes/orgUsage.js'
+import { sanitizeUserFacingError } from '../shared/userFacingErrors.js'
 import { ensureStorageRoot } from './services/storage.js'
 import { Router } from 'express'
 import { requireSession, loadAppUser } from './middleware/auth.js'
@@ -85,6 +87,7 @@ orgMemberRouter.use('/scorecards', scorecardsRouter)
 orgMemberRouter.use('/calls', callsRouter)
 orgMemberRouter.use('/departments', departmentsRouter)
 orgMemberRouter.use('/users', usersRouter)
+app.use('/api/org/usage', orgUsageRouter)
 app.use('/api/org', orgMemberRouter)
 
 app.use((err, req, res, next) => {
@@ -108,7 +111,9 @@ app.use((err, req, res, next) => {
   }
   if (!res.headersSent) {
     console.error('API error:', err)
-    res.status(500).json({ error: err.message || 'Internal server error' })
+    res.status(err.status || 500).json({
+      error: sanitizeUserFacingError(err.message || 'Internal server error'),
+    })
     return
   }
   next(err)

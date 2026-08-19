@@ -1,7 +1,7 @@
 import { prisma } from '../db.js'
 import { createAudioAccessToken, createJobCallbackToken, getPublicApiBase } from './jobTokens.js'
 import { WORKER_CALLBACK_HEADER } from '../../shared/workerContract.js'
-import { normalizeSttSettings } from '../../shared/sttSettings.js'
+import { sanitizeUserFacingError } from '../../shared/userFacingErrors.js'
 
 function getWorkerUrl() {
   return process.env.WORKER_URL?.replace(/\/$/, '') || null
@@ -178,7 +178,7 @@ export async function dispatchJob(jobId) {
       where: { id: job.callId },
       data: {
         status: 'FAILED',
-        errorMessage: `Failed to dispatch to worker: ${err.message}`,
+        errorMessage: sanitizeUserFacingError(err.message, 'processing'),
       },
     })
 

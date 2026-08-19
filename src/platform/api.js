@@ -1,4 +1,13 @@
+import { sanitizeUserFacingError } from '../../shared/userFacingErrors.js'
+
 const apiBase = import.meta.env.VITE_API_DOMAIN ?? ''
+
+export function userFacingError(err, context = 'default') {
+  if (err instanceof Error) {
+    return sanitizeUserFacingError(err.message, context)
+  }
+  return sanitizeUserFacingError(String(err ?? ''), context)
+}
 
 export async function api(path, options = {}) {
   const res = await fetch(`${apiBase}${path}`, {
@@ -15,7 +24,9 @@ export async function api(path, options = {}) {
   const data = await res.json().catch(() => ({}))
 
   if (!res.ok) {
-    throw new Error(data.error || `Request failed (${res.status})`)
+    throw new Error(
+      sanitizeUserFacingError(data.error || `Request failed (${res.status})`, 'request'),
+    )
   }
 
   return data
