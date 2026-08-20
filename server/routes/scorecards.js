@@ -10,7 +10,7 @@ import {
   DEFAULT_SCORECARD_LANGUAGE,
   isValidScorecardLanguage,
 } from '../../shared/scorecardLanguages.js'
-import { normalizeSttSettings } from '../../shared/sttSettings.js'
+import { normalizeSttSettings, isSummarizationSupported } from '../../shared/sttSettings.js'
 
 const router = Router({ mergeParams: true })
 
@@ -90,7 +90,7 @@ router.post('/', requireOrgAdminOrSuper, async (req, res, next) => {
         name: name.trim(),
         description: description?.trim() || null,
         language: scorecardLanguage,
-        sttSettings: normalizeSttSettings(sttSettings),
+        sttSettings: normalizeSttSettings(sttSettings, scorecardLanguage),
         isActive: Boolean(isActive),
         criteria: { create: parsedCriteria },
       },
@@ -132,7 +132,13 @@ router.patch('/:scorecardId', requireOrgAdminOrSuper, async (req, res, next) => 
       data.language = language
     }
     if (isActive !== undefined) data.isActive = Boolean(isActive)
-    if (sttSettings !== undefined) data.sttSettings = normalizeSttSettings(sttSettings)
+
+    const effectiveLanguage = data.language ?? existing.language
+    if (sttSettings !== undefined) {
+      data.sttSettings = normalizeSttSettings(sttSettings, effectiveLanguage)
+    } else if (language !== undefined && !isSummarizationSupported(language)) {
+      data.sttSettings = normalizeSttSettings(existing.sttSettings, language)
+    }
 
     let parsedCriteria
     if (criteria !== undefined) {

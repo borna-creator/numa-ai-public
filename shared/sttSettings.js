@@ -19,7 +19,12 @@ export const STT_SETTING_KEYS = [
 ]
 
 export const STT_SETTINGS_META = [
-  { key: 'summarize', label: 'Summarization', description: 'AI summary of the conversation (v2).' },
+  {
+    key: 'summarize',
+    label: 'Summarization',
+    description: 'AI summary of the conversation (English only).',
+    englishOnly: true,
+  },
   { key: 'detectEntities', label: 'Entity detection', description: 'Extract key entities from the transcript.' },
   { key: 'sentiment', label: 'Sentiment', description: 'Word, sentence, and segment-level sentiment.' },
   { key: 'smartFormat', label: 'Smart format', description: 'Improved punctuation, dates, times, and numbers.' },
@@ -54,21 +59,27 @@ export const DEFAULT_STT_SETTINGS = Object.freeze({
   redactNumbers: true,
 })
 
-export function normalizeSttSettings(input) {
+export function isSummarizationSupported(language) {
+  return language == null || language === 'ENGLISH'
+}
+
+export function normalizeSttSettings(input, language) {
   const base = { ...DEFAULT_STT_SETTINGS }
 
-  if (input == null || typeof input !== 'object') {
-    return base
-  }
-
-  for (const key of STT_SETTING_KEYS) {
-    if (key in input) {
-      base[key] = Boolean(input[key])
+  if (input != null && typeof input === 'object') {
+    for (const key of STT_SETTING_KEYS) {
+      if (key in input) {
+        base[key] = Boolean(input[key])
+      }
     }
   }
 
   if (base.paragraphs) {
     base.punctuate = true
+  }
+
+  if (!isSummarizationSupported(language)) {
+    base.summarize = false
   }
 
   return base
@@ -116,7 +127,7 @@ export function buildDeepgramListenOptions(sttSettings, languageCode) {
     numerals: settings.numerals,
   }
 
-  if (settings.summarize) options.summarize = 'v2'
+  if (settings.summarize && languageCode === 'en') options.summarize = 'v2'
   if (settings.detectEntities) options.detect_entities = true
   if (settings.sentiment) options.sentiment = true
   if (redact.length > 0) options.redact = redact

@@ -13,6 +13,8 @@ import {
 import {
   DEFAULT_STT_SETTINGS,
   STT_SETTINGS_META,
+  isSummarizationSupported,
+  normalizeSttSettings,
 } from '../../../../shared/sttSettings.js'
 import {
   Alert,
@@ -89,7 +91,7 @@ export default function ScorecardsPanel({ apiBase, canManage = false }) {
       description: scorecard.description || '',
       language: scorecard.language || DEFAULT_SCORECARD_LANGUAGE,
       isActive: scorecard.isActive,
-      sttSettings: { ...DEFAULT_STT_SETTINGS, ...(scorecard.sttSettings || {}) },
+      sttSettings: normalizeSttSettings(scorecard.sttSettings, scorecard.language),
       criteria: scorecard.criteria.map((c) => ({
         label: c.label,
         description: c.description || '',
@@ -108,7 +110,7 @@ export default function ScorecardsPanel({ apiBase, canManage = false }) {
         description: form.description,
         language: form.language,
         isActive: form.isActive,
-        sttSettings: form.sttSettings,
+        sttSettings: normalizeSttSettings(form.sttSettings, form.language),
         criteria: form.criteria.filter((c) => c.label.trim()),
       }
 
@@ -150,9 +152,18 @@ export default function ScorecardsPanel({ apiBase, canManage = false }) {
   }
 
   const updateSttSetting = (key, value) => {
+    if (key === 'summarize' && !isSummarizationSupported(form.language)) return
     setForm((prev) => ({
       ...prev,
       sttSettings: { ...prev.sttSettings, [key]: value },
+    }))
+  }
+
+  const handleLanguageChange = (language) => {
+    setForm((prev) => ({
+      ...prev,
+      language,
+      sttSettings: normalizeSttSettings(prev.sttSettings, language),
     }))
   }
 
@@ -194,7 +205,7 @@ export default function ScorecardsPanel({ apiBase, canManage = false }) {
               <Select
                 label="Language"
                 value={form.language}
-                onChange={(e) => setForm({ ...form, language: e.target.value })}
+                onChange={(e) => handleLanguageChange(e.target.value)}
               >
                 {SCORECARD_LANGUAGES.map((lang) => (
                   <option key={lang.value} value={lang.value}>{lang.label}</option>
@@ -229,24 +240,35 @@ export default function ScorecardsPanel({ apiBase, canManage = false }) {
               </button>
               {showSttSettings && (
                 <div className="p-4 grid sm:grid-cols-2 gap-2 border-t border-slate-200 bg-white">
-                  {STT_SETTINGS_META.map(({ key, label, description }) => (
+                  {STT_SETTINGS_META.map(({ key, label, description, englishOnly }) => {
+                    const disabled = englishOnly && !isSummarizationSupported(form.language)
+                    return (
                     <label
                       key={key}
-                      className="flex items-start gap-2.5 text-sm text-slate-700 p-3 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-100"
+                      className={`flex items-start gap-2.5 text-sm p-3 rounded-xl border border-transparent ${
+                        disabled
+                          ? 'text-slate-400 cursor-not-allowed opacity-60'
+                          : 'text-slate-700 hover:bg-slate-50 hover:border-slate-100'
+                      }`}
                       title={description}
                     >
                       <input
                         type="checkbox"
                         className="mt-0.5 rounded border-slate-300 text-numa-600"
                         checked={Boolean(form.sttSettings[key])}
+                        disabled={disabled}
                         onChange={(e) => updateSttSetting(key, e.target.checked)}
                       />
                       <span>
                         <span className="font-medium text-slate-900">{label}</span>
-                        <span className="block text-xs text-slate-500 mt-0.5 leading-relaxed">{description}</span>
+                        <span className="block text-xs text-slate-500 mt-0.5 leading-relaxed">
+                          {description}
+                          {disabled && ' Not available for this language.'}
+                        </span>
                       </span>
                     </label>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </div>

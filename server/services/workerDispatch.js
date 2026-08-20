@@ -35,7 +35,7 @@ export function buildJobPayload(job, call, dispatchedAt) {
       id: call.scorecard.id,
       name: call.scorecard.name,
       language: call.scorecard.language,
-      sttSettings: normalizeSttSettings(call.scorecard.sttSettings),
+      sttSettings: normalizeSttSettings(call.scorecard.sttSettings, call.scorecard.language),
       criteria: call.scorecard.criteria.map((c) => ({
         id: c.id,
         label: c.label,
