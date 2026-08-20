@@ -2,6 +2,7 @@ import { prisma } from '../db.js'
 import { createAudioAccessToken, createJobCallbackToken, getPublicApiBase } from './jobTokens.js'
 import { WORKER_CALLBACK_HEADER } from '../../shared/workerContract.js'
 import { sanitizeUserFacingError } from '../../shared/userFacingErrors.js'
+import { normalizeSttSettings } from '../../shared/sttSettings.js'
 
 function getWorkerUrl() {
   return process.env.WORKER_URL?.replace(/\/$/, '') || null
