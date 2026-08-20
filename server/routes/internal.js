@@ -4,6 +4,7 @@ import { verifyAudioAccessToken, verifyWorkerSecret, verifyJobCallbackToken } fr
 import { createCallReadStream } from '../services/storage.js'
 import { computeOverallScore, normalizeCallbackResults } from '../services/scoring.js'
 import { sanitizeUserFacingError } from '../../shared/userFacingErrors.js'
+import { WORKER_CALLBACK_HEADER } from '../../shared/workerContract.js'
 
 const router = Router()
 
