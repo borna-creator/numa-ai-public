@@ -103,6 +103,13 @@ export async function seedSupremeAdmin({ force = false } = {}) {
     return
   }
 
+  const existing = await prisma.user.findUnique({ where: { email } })
+
+  if (existing?.superTokensUserId && force) {
+    await updateAuthUserPassword(existing.superTokensUserId, password)
+    console.log('✓ Supreme admin password updated from .env')
+  }
+
   const superTokensUserId = await ensureSeedAuthUser(email, password)
 
   const profileDefaults = {
@@ -112,21 +119,21 @@ export async function seedSupremeAdmin({ force = false } = {}) {
     jobTitle: 'Platform Administrator',
   }
 
-  const existing = await prisma.user.findUnique({ where: { email } })
+  const existingAfterAuth = await prisma.user.findUnique({ where: { email } })
 
-  if (existing) {
+  if (existingAfterAuth) {
     const needsSync =
       force ||
-      existing.role !== 'SUPER_ADMIN' ||
-      existing.superTokensUserId !== superTokensUserId
+      existingAfterAuth.role !== 'SUPER_ADMIN' ||
+      existingAfterAuth.superTokensUserId !== superTokensUserId
 
     if (needsSync) {
       await prisma.user.update({
-        where: { id: existing.id },
+        where: { id: existingAfterAuth.id },
         data: {
           ...profileDefaults,
-          fullName: existing.fullName || profileDefaults.fullName,
-          jobTitle: existing.jobTitle || profileDefaults.jobTitle,
+          fullName: existingAfterAuth.fullName || profileDefaults.fullName,
+          jobTitle: existingAfterAuth.jobTitle || profileDefaults.jobTitle,
         },
       })
       console.log('✓ Supreme admin profile synced:', email)
