@@ -6,6 +6,7 @@ import { Alert, Button, Card, CardHeader, LoadingState } from '../../components/
 const STATUS = {
   idle: 'Ready to start a conversation',
   connecting: 'Connecting…',
+  waiting: 'Connected — waiting for the assistant to join…',
   active: 'Connected — speak when ready',
   disconnecting: 'Ending session…',
 }
@@ -43,13 +44,53 @@ function VoiceOrb({ active, speaking }) {
   )
 }
 
+const STATUS_HINTS = {
+  worker_url_missing: 'WORKER_URL is not set on the API server (VPS 1).',
+  worker_secret_missing: 'WORKER_SECRET is not set on the API server (VPS 1).',
+  worker_unreachable: 'The API server cannot reach the processing worker. Check WORKER_URL and firewall rules.',
+  worker_unauthorized: 'WORKER_SECRET does not match between VPS 1 and VPS 2.',
+  worker_outdated: 'The processing worker is running old code — git pull and restart on VPS 2.',
+  worker_error: 'The processing worker returned an error. Check worker logs.',
+  voice_not_configured: 'LiveKit credentials are missing on VPS 2.',
+}
+
+function attachRemoteAudio(track, container) {
+  if (track.kind !== Track.Kind.Audio || !container) return
+  const element = track.attach()
+  element.autoplay = true
+  element.playsInline = true
+  element.setAttribute('playsinline', 'true')
+  element.style.display = 'none'
+  container.appendChild(element)
+  element.play().catch(() => {
+    // startAudio() on the room handles browser unlock in most cases
+  })
+}
+
+function attachExistingRemoteAudio(room, container, onRemote) {
+  for (const participant of room.remoteParticipants.values()) {
+    onRemote(participant)
+    for (const publication of participant.audioTrackPublications.values()) {
+      if (publication.track) {
+        attachRemoteAudio(publication.track, container)
+      }
+    }
+  }
+}
+
 export default function VoiceAgentTab() {
   const roomRef = useRef(null)
   const audioContainerRef = useRef(null)
+  const waitTimerRef = useRef(null)
+  const assistantJoinedRef = useRef(false)
   const [available, setAvailable] = useState(null)
+  const [agentConfigured, setAgentConfigured] = useState(true)
+  const [statusHint, setStatusHint] = useState('')
+  const [missingVars, setMissingVars] = useState([])
   const [status, setStatus] = useState('idle')
   const [error, setError] = useState('')
   const [speaking, setSpeaking] = useState(false)
+  const [assistantJoined, setAssistantJoined] = useState(false)
   const [lines, setLines] = useState([])
 
   const appendLine = useCallback((role, text) => {
@@ -58,7 +99,26 @@ export default function VoiceAgentTab() {
     setLines((prev) => [...prev, { id: `${Date.now()}-${prev.length}`, role, text: trimmed }])
   }, [])
 
+  const clearWaitTimer = useCallback(() => {
+    if (waitTimerRef.current) {
+      clearTimeout(waitTimerRef.current)
+      waitTimerRef.current = null
+    }
+  }, [])
+
+  const markAssistantJoined = useCallback(
+    (participant) => {
+      assistantJoinedRef.current = true
+      setAssistantJoined(true)
+      setStatus('active')
+      clearWaitTimer()
+      appendLine('assistant', `Assistant connected${participant?.name ? ` (${participant.name})` : ''}.`)
+    },
+    [appendLine, clearWaitTimer],
+  )
+
   const disconnect = useCallback(async () => {
+    clearWaitTimer()
     const room = roomRef.current
     roomRef.current = null
     if (!room) return
@@ -76,13 +136,23 @@ export default function VoiceAgentTab() {
     }
 
     setSpeaking(false)
+    setAssistantJoined(false)
+    assistantJoinedRef.current = false
     setStatus('idle')
-  }, [])
+  }, [clearWaitTimer])
 
   useEffect(() => {
     api('/api/voice/status')
-      .then((data) => setAvailable(Boolean(data.available)))
-      .catch(() => setAvailable(false))
+      .then((data) => {
+        setAvailable(Boolean(data.available))
+        setAgentConfigured(data.agentConfigured !== false)
+        setStatusHint(data.reason ? STATUS_HINTS[data.reason] || '' : '')
+        setMissingVars(Array.isArray(data.missing) ? data.missing : [])
+      })
+      .catch(() => {
+        setAvailable(false)
+        setStatusHint('Could not reach the voice status endpoint. Deploy the latest API on VPS 1.')
+      })
   }, [])
 
   useEffect(() => {
@@ -95,6 +165,9 @@ export default function VoiceAgentTab() {
     setError('')
     setStatus('connecting')
     setLines([])
+    setAssistantJoined(false)
+    assistantJoinedRef.current = false
+    clearWaitTimer()
 
     try {
       const data = await api('/api/voice/session', { method: 'POST' })
@@ -103,14 +176,61 @@ export default function VoiceAgentTab() {
         throw new Error('Voice assistant is not available right now.')
       }
 
+      const agent = session.agent ?? {}
+      if (!agent.configured) {
+        appendLine(
+          'system',
+          'No voice agent is configured. Set LIVEKIT_AGENT_NAME on VPS 2 to match your deployed agent.',
+        )
+      } else if (!agent.dispatched) {
+        appendLine(
+          'system',
+          'Could not dispatch the voice agent. Check LIVEKIT_AGENT_NAME and worker logs on VPS 2.',
+        )
+      } else {
+        appendLine('system', `Dispatching voice agent${agent.name ? ` (${agent.name})` : ''}…`)
+      }
+
       const room = new Room({
         adaptiveStream: true,
         dynacast: true,
+        audioCaptureDefaults: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
       })
       roomRef.current = room
 
-      room.on(RoomEvent.Connected, () => {
-        setStatus('active')
+      const handleRemoteParticipant = (participant) => {
+        if (participant.isLocal) return
+        markAssistantJoined(participant)
+      }
+
+      room.on(RoomEvent.Connected, async () => {
+        appendLine('system', 'You are connected. Enabling microphone…')
+        try {
+          await room.localParticipant.setMicrophoneEnabled(true)
+          await room.startAudio()
+          appendLine('system', 'Microphone is live. Say hello when the assistant joins.')
+        } catch (micErr) {
+          appendLine('system', 'Microphone access failed. Allow mic permission in your browser and try again.')
+          throw micErr
+        }
+
+        attachExistingRemoteAudio(room, audioContainerRef.current, handleRemoteParticipant)
+
+        if (room.remoteParticipants.size === 0) {
+          setStatus('waiting')
+          waitTimerRef.current = setTimeout(() => {
+            if (!assistantJoinedRef.current) {
+              appendLine(
+                'system',
+                'The assistant has not joined yet. Confirm your agent worker is running and LIVEKIT_AGENT_NAME matches.',
+              )
+            }
+          }, 15000)
+        }
       })
 
       room.on(RoomEvent.Disconnected, () => {
@@ -118,17 +238,17 @@ export default function VoiceAgentTab() {
           roomRef.current = null
           setStatus('idle')
           setSpeaking(false)
+          setAssistantJoined(false)
+          clearWaitTimer()
         }
       })
 
+      room.on(RoomEvent.ParticipantConnected, handleRemoteParticipant)
+
       room.on(RoomEvent.TrackSubscribed, (track, _publication, participant) => {
-        if (track.kind !== Track.Kind.Audio || !audioContainerRef.current) return
-        const element = track.attach()
-        element.autoplay = true
-        audioContainerRef.current.appendChild(element)
-        if (!participant.isLocal) {
-          appendLine('assistant', 'Assistant joined — listening…')
-        }
+        if (participant.isLocal) return
+        attachRemoteAudio(track, audioContainerRef.current)
+        markAssistantJoined(participant)
       })
 
       room.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
@@ -142,12 +262,14 @@ export default function VoiceAgentTab() {
         appendLine(participant?.isLocal ? 'you' : 'assistant', text)
       })
 
-      await room.connect(session.connectUrl, session.accessToken)
-      await room.localParticipant.setMicrophoneEnabled(true)
-      appendLine('system', 'Session started. Your microphone is live.')
+      room.on(RoomEvent.MediaDevicesError, () => {
+        appendLine('system', 'Could not access your microphone. Check browser permissions.')
+      })
+
+      await room.connect(session.connectUrl, session.accessToken, { autoSubscribe: true })
     } catch (err) {
       await disconnect()
-      setError(err.message)
+      setError(err.message || 'Unable to start the voice session.')
       setStatus('idle')
     }
   }
@@ -156,7 +278,7 @@ export default function VoiceAgentTab() {
     return <LoadingState label="Checking voice assistant…" />
   }
 
-  const isActive = status === 'active' || status === 'connecting'
+  const isActive = status === 'active' || status === 'connecting' || status === 'waiting'
   const busy = status === 'connecting' || status === 'disconnecting'
 
   return (
@@ -165,8 +287,20 @@ export default function VoiceAgentTab() {
 
       {!available && (
         <Alert variant="warning">
-          Voice assistant is not configured yet. Add your voice credentials on the processing server and
-          restart the worker.
+          <p>Voice assistant is not available yet.</p>
+          {statusHint && <p className="mt-2">{statusHint}</p>}
+          {missingVars.length > 0 && (
+            <p className="mt-2">
+              Missing on VPS 2: <span className="font-mono text-xs">{missingVars.join(', ')}</span>
+            </p>
+          )}
+        </Alert>
+      )}
+
+      {available && !agentConfigured && (
+        <Alert variant="warning">
+          LIVEKIT_AGENT_NAME is not set on VPS 2. You can connect, but no assistant will join the
+          session until it matches your deployed agent name.
         </Alert>
       )}
 
@@ -179,6 +313,11 @@ export default function VoiceAgentTab() {
         <div className="flex flex-col items-center gap-6 py-4">
           <VoiceOrb active={isActive} speaking={speaking} />
           <p className="text-sm font-medium text-slate-600">{STATUS[status] || status}</p>
+          {isActive && (
+            <p className="text-xs text-slate-500">
+              {assistantJoined ? 'Assistant is in the session' : 'Waiting for the assistant to join…'}
+            </p>
+          )}
 
           <div className="flex flex-wrap gap-3 justify-center">
             {!isActive ? (
@@ -193,7 +332,7 @@ export default function VoiceAgentTab() {
           </div>
         </div>
 
-        <div ref={audioContainerRef} className="hidden" aria-hidden="true" />
+        <div ref={audioContainerRef} aria-hidden="true" />
 
         {lines.length > 0 && (
           <div className="mt-8 border-t border-slate-100 pt-6">

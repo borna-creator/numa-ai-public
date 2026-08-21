@@ -15,19 +15,40 @@ router.get('/status', async (_req, res, next) => {
   try {
     const workerUrl = getWorkerUrl()
     if (!workerUrl) {
-      return res.json({ available: false })
+      return res.json({ available: false, reason: 'worker_url_missing' })
+    }
+    if (!process.env.WORKER_SECRET) {
+      return res.json({ available: false, reason: 'worker_secret_missing' })
     }
 
-    const response = await fetch(`${workerUrl}/voice/status`, {
-      headers: { [WORKER_CALLBACK_HEADER]: process.env.WORKER_SECRET },
-    })
+    let response
+    try {
+      response = await fetch(`${workerUrl}/voice/status`, {
+        headers: { [WORKER_CALLBACK_HEADER]: process.env.WORKER_SECRET },
+      })
+    } catch {
+      return res.json({ available: false, reason: 'worker_unreachable' })
+    }
+
+    if (response.status === 401) {
+      return res.json({ available: false, reason: 'worker_unauthorized' })
+    }
+
+    if (response.status === 404) {
+      return res.json({ available: false, reason: 'worker_outdated' })
+    }
 
     if (!response.ok) {
-      return res.json({ available: false })
+      return res.json({ available: false, reason: 'worker_error' })
     }
 
     const data = await response.json()
-    res.json({ available: Boolean(data.available) })
+    res.json({
+      available: Boolean(data.available),
+      reason: data.available ? null : 'voice_not_configured',
+      missing: data.missing,
+      agentConfigured: Boolean(data.agentConfigured),
+    })
   } catch (err) {
     next(err)
   }
