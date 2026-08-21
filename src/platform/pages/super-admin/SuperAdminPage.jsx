@@ -1,12 +1,15 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { Tabs } from '../../components/Tabs.jsx'
 import UserManagementTab from './UserManagementTab.jsx'
 import QaPlatformTab from '../qa/QaPlatformTab.jsx'
-import { Card } from '../../components/ui.jsx'
+import { Card, LoadingState } from '../../components/ui.jsx'
+
+const VoiceAgentTab = lazy(() => import('./VoiceAgentTab.jsx'))
 
 const SUPER_ADMIN_TABS = [
   { id: 'user-management', label: 'User Management' },
   { id: 'qa', label: 'QA Platform' },
+  { id: 'voice', label: 'Voice Assistant' },
 ]
 
 export default function SuperAdminPage() {
@@ -19,6 +22,11 @@ export default function SuperAdminPage() {
       </Card>
       {activeTab === 'user-management' && <UserManagementTab />}
       {activeTab === 'qa' && <QaPlatformTab canManageScorecards />}
+      {activeTab === 'voice' && (
+        <Suspense fallback={<LoadingState label="Loading voice assistant…" />}>
+          <VoiceAgentTab />
+        </Suspense>
+      )}
     </div>
   )
 }

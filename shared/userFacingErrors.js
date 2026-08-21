@@ -1,7 +1,7 @@
-const VENDOR_PATTERN = /deepgram|deepinfra|deepseek/i
+const VENDOR_PATTERN = /deepgram|deepinfra|deepseek|livekit/i
 
 const TECHNICAL_PATTERN =
-  /worker rejected|failed to dispatch|worker reported|json_schema|invalid json|missing .* array|empty transcript|empty content|finish_reason|\braw:|api\.deepinfra|api\.deepgram|DEEPGRAM_|DEEPINFRA_|DEEPSEEK_|WORKER_URL|not configured on the worker/i
+  /worker rejected|failed to dispatch|worker reported|json_schema|invalid json|missing .* array|empty transcript|empty content|finish_reason|\braw:|api\.deepinfra|api\.deepgram|DEEPGRAM_|DEEPINFRA_|DEEPSEEK_|WORKER_URL|LIVEKIT_|not configured on the worker|voice service/i
 
 export const USER_FACING_ERRORS = {
   default: 'Something went wrong. Please try again.',

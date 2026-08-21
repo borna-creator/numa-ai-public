@@ -13,6 +13,7 @@ import departmentsRouter from './routes/departments.js'
 import usersRouter from './routes/users.js'
 import scorecardsRouter from './routes/scorecards.js'
 import callsRouter from './routes/calls.js'
+import voiceRouter from './routes/voice.js'
 import orgUsageRouter from './routes/orgUsage.js'
 import { sanitizeUserFacingError } from '../shared/userFacingErrors.js'
 import { ensureStorageRoot } from './services/storage.js'
@@ -87,6 +88,7 @@ orgMemberRouter.use('/scorecards', scorecardsRouter)
 orgMemberRouter.use('/calls', callsRouter)
 orgMemberRouter.use('/departments', departmentsRouter)
 orgMemberRouter.use('/users', usersRouter)
+app.use('/api/voice', voiceRouter)
 app.use('/api/org/usage', orgUsageRouter)
 app.use('/api/org', orgMemberRouter)
 
