@@ -46,7 +46,6 @@ router.get('/status', async (_req, res, next) => {
     res.json({
       available: Boolean(data.available),
       reason: data.available ? null : 'voice_not_configured',
-      missing: data.missing,
       agentConfigured: Boolean(data.agentConfigured),
     })
   } catch (err) {
@@ -81,7 +80,18 @@ router.post('/session', async (req, res, next) => {
       })
     }
 
-    res.json(data)
+    const session = data.session ?? data
+    res.json({
+      session: {
+        sessionId: session.sessionId,
+        connectUrl: session.connectUrl,
+        accessToken: session.accessToken,
+        agent: {
+          configured: Boolean(session.agent?.configured),
+          dispatched: Boolean(session.agent?.dispatched),
+        },
+      },
+    })
   } catch (err) {
     next(err)
   }

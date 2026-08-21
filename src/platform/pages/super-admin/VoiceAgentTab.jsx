@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Room, RoomEvent, Track } from 'livekit-client'
-import { api } from '../../api.js'
+import { LogLevel, Room, RoomEvent, Track, setLogLevel } from 'livekit-client'
+import { api, userFacingError } from '../../api.js'
 import { Alert, Button, Card, CardHeader, LoadingState } from '../../components/ui.jsx'
+
+setLogLevel(LogLevel.silent)
 
 const STATUS = {
   idle: 'Ready to start a conversation',
@@ -45,13 +47,13 @@ function VoiceOrb({ active, speaking }) {
 }
 
 const STATUS_HINTS = {
-  worker_url_missing: 'WORKER_URL is not set on the API server (VPS 1).',
-  worker_secret_missing: 'WORKER_SECRET is not set on the API server (VPS 1).',
-  worker_unreachable: 'The API server cannot reach the processing worker. Check WORKER_URL and firewall rules.',
-  worker_unauthorized: 'WORKER_SECRET does not match between VPS 1 and VPS 2.',
-  worker_outdated: 'The processing worker is running old code — git pull and restart on VPS 2.',
-  worker_error: 'The processing worker returned an error. Check worker logs.',
-  voice_not_configured: 'LiveKit credentials are missing on VPS 2.',
+  worker_url_missing: 'Voice assistant is not available right now. Contact your administrator.',
+  worker_secret_missing: 'Voice assistant is not available right now. Contact your administrator.',
+  worker_unreachable: 'Voice assistant is not available right now. Please try again later.',
+  worker_unauthorized: 'Voice assistant is not available right now. Contact your administrator.',
+  worker_outdated: 'Voice assistant is not available right now. Contact your administrator.',
+  worker_error: 'Voice assistant is not available right now. Please try again later.',
+  voice_not_configured: 'Voice assistant is not configured yet. Contact your administrator.',
 }
 
 function attachRemoteAudio(track, container) {
@@ -86,7 +88,6 @@ export default function VoiceAgentTab() {
   const [available, setAvailable] = useState(null)
   const [agentConfigured, setAgentConfigured] = useState(true)
   const [statusHint, setStatusHint] = useState('')
-  const [missingVars, setMissingVars] = useState([])
   const [status, setStatus] = useState('idle')
   const [error, setError] = useState('')
   const [speaking, setSpeaking] = useState(false)
@@ -107,12 +108,12 @@ export default function VoiceAgentTab() {
   }, [])
 
   const markAssistantJoined = useCallback(
-    (participant) => {
+    (_participant) => {
       assistantJoinedRef.current = true
       setAssistantJoined(true)
       setStatus('active')
       clearWaitTimer()
-      appendLine('assistant', `Assistant connected${participant?.name ? ` (${participant.name})` : ''}.`)
+      appendLine('assistant', 'Assistant connected.')
     },
     [appendLine, clearWaitTimer],
   )
@@ -147,11 +148,10 @@ export default function VoiceAgentTab() {
         setAvailable(Boolean(data.available))
         setAgentConfigured(data.agentConfigured !== false)
         setStatusHint(data.reason ? STATUS_HINTS[data.reason] || '' : '')
-        setMissingVars(Array.isArray(data.missing) ? data.missing : [])
       })
       .catch(() => {
         setAvailable(false)
-        setStatusHint('Could not reach the voice status endpoint. Deploy the latest API on VPS 1.')
+        setStatusHint('Voice assistant is not available right now.')
       })
   }, [])
 
@@ -178,17 +178,11 @@ export default function VoiceAgentTab() {
 
       const agent = session.agent ?? {}
       if (!agent.configured) {
-        appendLine(
-          'system',
-          'No voice agent is configured. Set LIVEKIT_AGENT_NAME on VPS 2 to match your deployed agent.',
-        )
+        appendLine('system', 'Voice assistant is not fully configured. Contact your administrator.')
       } else if (!agent.dispatched) {
-        appendLine(
-          'system',
-          'Could not dispatch the voice agent. Check LIVEKIT_AGENT_NAME and worker logs on VPS 2.',
-        )
+        appendLine('system', 'Unable to reach the voice assistant. Please try again later.')
       } else {
-        appendLine('system', `Dispatching voice agent${agent.name ? ` (${agent.name})` : ''}…`)
+        appendLine('system', 'Connecting to the voice assistant…')
       }
 
       const room = new Room({
@@ -226,7 +220,7 @@ export default function VoiceAgentTab() {
             if (!assistantJoinedRef.current) {
               appendLine(
                 'system',
-                'The assistant has not joined yet. Confirm your agent worker is running and LIVEKIT_AGENT_NAME matches.',
+                'The assistant has not joined yet. Please try again in a moment.',
               )
             }
           }, 15000)
@@ -269,7 +263,7 @@ export default function VoiceAgentTab() {
       await room.connect(session.connectUrl, session.accessToken, { autoSubscribe: true })
     } catch (err) {
       await disconnect()
-      setError(err.message || 'Unable to start the voice session.')
+      setError(userFacingError(err, 'default'))
       setStatus('idle')
     }
   }
@@ -289,18 +283,13 @@ export default function VoiceAgentTab() {
         <Alert variant="warning">
           <p>Voice assistant is not available yet.</p>
           {statusHint && <p className="mt-2">{statusHint}</p>}
-          {missingVars.length > 0 && (
-            <p className="mt-2">
-              Missing on VPS 2: <span className="font-mono text-xs">{missingVars.join(', ')}</span>
-            </p>
-          )}
         </Alert>
       )}
 
       {available && !agentConfigured && (
         <Alert variant="warning">
-          LIVEKIT_AGENT_NAME is not set on VPS 2. You can connect, but no assistant will join the
-          session until it matches your deployed agent name.
+          Voice assistant is not fully configured. You can connect, but the assistant may not join.
+          Contact your administrator.
         </Alert>
       )}
 
