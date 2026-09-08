@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { LogLevel, Room, RoomEvent, Track, setLogLevel } from 'livekit-client'
 import { api, userFacingError } from '../../api.js'
-import { Alert, Button, Card, CardHeader, LoadingState } from '../../components/ui.jsx'
+import {
+  DEFAULT_VOICE_AGENT_LANGUAGE,
+  VOICE_AGENT_LANGUAGES,
+  getVoiceAgentLanguageLabel,
+} from '../../../../shared/voiceAgents.js'
+import { Alert, Button, Card, CardHeader, LoadingState, Select } from '../../components/ui.jsx'
 
 setLogLevel(LogLevel.silent)
 
@@ -87,6 +92,8 @@ export default function VoiceAgentTab() {
   const assistantJoinedRef = useRef(false)
   const [available, setAvailable] = useState(null)
   const [agentConfigured, setAgentConfigured] = useState(true)
+  const [agentsByLanguage, setAgentsByLanguage] = useState({})
+  const [language, setLanguage] = useState(DEFAULT_VOICE_AGENT_LANGUAGE)
   const [statusHint, setStatusHint] = useState('')
   const [status, setStatus] = useState('idle')
   const [error, setError] = useState('')
@@ -147,6 +154,7 @@ export default function VoiceAgentTab() {
       .then((data) => {
         setAvailable(Boolean(data.available))
         setAgentConfigured(data.agentConfigured !== false)
+        setAgentsByLanguage(data.agents ?? {})
         setStatusHint(data.reason ? STATUS_HINTS[data.reason] || '' : '')
       })
       .catch(() => {
@@ -170,7 +178,10 @@ export default function VoiceAgentTab() {
     clearWaitTimer()
 
     try {
-      const data = await api('/api/voice/session', { method: 'POST' })
+      const data = await api('/api/voice/session', {
+        method: 'POST',
+        body: JSON.stringify({ language }),
+      })
       const { session } = data
       if (!session?.connectUrl || !session?.accessToken) {
         throw new Error('Voice assistant is not available right now.')
@@ -182,7 +193,10 @@ export default function VoiceAgentTab() {
       } else if (!agent.dispatched) {
         appendLine('system', 'Unable to reach the voice assistant. Please try again later.')
       } else {
-        appendLine('system', 'Connecting to the voice assistant…')
+        appendLine(
+          'system',
+          `Connecting to the ${getVoiceAgentLanguageLabel(language).toLowerCase()} assistant…`,
+        )
       }
 
       const room = new Room({
@@ -274,6 +288,7 @@ export default function VoiceAgentTab() {
 
   const isActive = status === 'active' || status === 'connecting' || status === 'waiting'
   const busy = status === 'connecting' || status === 'disconnecting'
+  const selectedAgentReady = agentsByLanguage[language] !== false
 
   return (
     <div className="space-y-6">
@@ -300,6 +315,27 @@ export default function VoiceAgentTab() {
         />
 
         <div className="flex flex-col items-center gap-6 py-4">
+          {!isActive && (
+            <div className="w-full max-w-xs">
+              <Select
+                label="Assistant language"
+                value={language}
+                onChange={(e) => setLanguage(e.target.value)}
+              >
+                {VOICE_AGENT_LANGUAGES.map((lang) => (
+                  <option
+                    key={lang.value}
+                    value={lang.value}
+                    disabled={agentsByLanguage[lang.value] === false}
+                  >
+                    {lang.label}
+                    {agentsByLanguage[lang.value] === false ? ' (unavailable)' : ''}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          )}
+
           <VoiceOrb active={isActive} speaking={speaking} />
           <p className="text-sm font-medium text-slate-600">{STATUS[status] || status}</p>
           {isActive && (
@@ -310,7 +346,11 @@ export default function VoiceAgentTab() {
 
           <div className="flex flex-wrap gap-3 justify-center">
             {!isActive ? (
-              <Button onClick={startSession} disabled={!available || busy} size="lg">
+              <Button
+                onClick={startSession}
+                disabled={!available || busy || !selectedAgentReady}
+                size="lg"
+              >
                 Start conversation
               </Button>
             ) : (

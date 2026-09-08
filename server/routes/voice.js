@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { requireSession, loadAppUser, requireSuperAdmin } from '../middleware/auth.js'
 import { WORKER_CALLBACK_HEADER } from '../../shared/workerContract.js'
 import { sanitizeUserFacingError } from '../../shared/userFacingErrors.js'
+import { isValidVoiceAgentLanguage } from '../../shared/voiceAgents.js'
 
 const router = Router()
 
@@ -47,6 +48,7 @@ router.get('/status', async (_req, res, next) => {
       available: Boolean(data.available),
       reason: data.available ? null : 'voice_not_configured',
       agentConfigured: Boolean(data.agentConfigured),
+      agents: data.agents ?? {},
     })
   } catch (err) {
     next(err)
@@ -55,6 +57,11 @@ router.get('/status', async (_req, res, next) => {
 
 router.post('/session', async (req, res, next) => {
   try {
+    const language = req.body?.language
+    if (language != null && language !== '' && !isValidVoiceAgentLanguage(language)) {
+      return res.status(400).json({ error: 'Invalid voice assistant language' })
+    }
+
     const workerUrl = getWorkerUrl()
     if (!workerUrl || !process.env.WORKER_SECRET) {
       return res.status(503).json({ error: 'Voice assistant is not available right now.' })
@@ -69,6 +76,7 @@ router.post('/session', async (req, res, next) => {
       body: JSON.stringify({
         participantId: req.appUser.id,
         participantName: req.appUser.fullName?.trim() || req.appUser.email,
+        language: req.body?.language,
       }),
     })
 
@@ -87,6 +95,7 @@ router.post('/session', async (req, res, next) => {
         connectUrl: session.connectUrl,
         accessToken: session.accessToken,
         agent: {
+          language: session.agent?.language ?? null,
           configured: Boolean(session.agent?.configured),
           dispatched: Boolean(session.agent?.dispatched),
         },
