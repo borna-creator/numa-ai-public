@@ -6,7 +6,11 @@ import {
   VOICE_AGENT_LANGUAGES,
   getVoiceAgentLanguageLabel,
 } from '../../../../shared/voiceAgents.js'
-import { Alert, Button, Card, CardHeader, LoadingState, Select } from '../../components/ui.jsx'
+import {
+  VOICE_PROMPT_MAX_GREETING_CHARS,
+  VOICE_PROMPT_MAX_SYSTEM_CHARS,
+} from '../../../../shared/voiceAgentPrompts.js'
+import { Alert, Button, Card, CardHeader, LoadingState, Select, Textarea } from '../../components/ui.jsx'
 
 setLogLevel(LogLevel.silent)
 
@@ -100,6 +104,14 @@ export default function VoiceAgentTab() {
   const [speaking, setSpeaking] = useState(false)
   const [assistantJoined, setAssistantJoined] = useState(false)
   const [lines, setLines] = useState([])
+  const [promptsByLanguage, setPromptsByLanguage] = useState({})
+  const [promptsLoading, setPromptsLoading] = useState(true)
+  const [editPromptLanguage, setEditPromptLanguage] = useState(DEFAULT_VOICE_AGENT_LANGUAGE)
+  const [systemPrompt, setSystemPrompt] = useState('')
+  const [greetingPrompt, setGreetingPrompt] = useState('')
+  const [promptSaving, setPromptSaving] = useState(false)
+  const [promptMessage, setPromptMessage] = useState('')
+  const [promptError, setPromptError] = useState('')
 
   const appendLine = useCallback((role, text) => {
     const trimmed = text?.trim()
@@ -164,10 +176,70 @@ export default function VoiceAgentTab() {
   }, [])
 
   useEffect(() => {
+    api('/api/voice/prompts')
+      .then((data) => {
+        const map = Object.fromEntries((data.prompts ?? []).map((row) => [row.language, row]))
+        setPromptsByLanguage(map)
+      })
+      .catch(() => {
+        setPromptError('Could not load agent prompts.')
+      })
+      .finally(() => {
+        setPromptsLoading(false)
+      })
+  }, [])
+
+  useEffect(() => {
+    const row = promptsByLanguage[editPromptLanguage]
+    if (!row) return
+    setSystemPrompt(row.systemPrompt ?? '')
+    setGreetingPrompt(row.greetingPrompt ?? '')
+    setPromptMessage('')
+    setPromptError('')
+  }, [editPromptLanguage, promptsByLanguage])
+
+  useEffect(() => {
     return () => {
       disconnect()
     }
   }, [disconnect])
+
+  const savePrompts = async () => {
+    setPromptSaving(true)
+    setPromptMessage('')
+    setPromptError('')
+    try {
+      const data = await api(`/api/voice/prompts/${editPromptLanguage}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ systemPrompt, greetingPrompt }),
+      })
+      setPromptsByLanguage((prev) => ({ ...prev, [data.prompt.language]: data.prompt }))
+      setPromptMessage('Prompts saved. The next conversation will use them.')
+    } catch (err) {
+      setPromptError(userFacingError(err, 'default'))
+    } finally {
+      setPromptSaving(false)
+    }
+  }
+
+  const resetPrompts = async () => {
+    setPromptSaving(true)
+    setPromptMessage('')
+    setPromptError('')
+    try {
+      const data = await api(`/api/voice/prompts/${editPromptLanguage}/reset`, {
+        method: 'POST',
+      })
+      setPromptsByLanguage((prev) => ({ ...prev, [data.prompt.language]: data.prompt }))
+      setSystemPrompt(data.prompt.systemPrompt)
+      setGreetingPrompt(data.prompt.greetingPrompt)
+      setPromptMessage('Prompts reset to defaults.')
+    } catch (err) {
+      setPromptError(userFacingError(err, 'default'))
+    } finally {
+      setPromptSaving(false)
+    }
+  }
 
   const startSession = async () => {
     setError('')
@@ -392,6 +464,71 @@ export default function VoiceAgentTab() {
                 </li>
               ))}
             </ul>
+          </div>
+        )}
+      </Card>
+
+      <Card>
+        <CardHeader
+          title="Agent prompts"
+          description="Edit what each language assistant says and how it behaves. Changes apply to the next session — no agent restart needed."
+        />
+
+        {promptsLoading ? (
+          <LoadingState label="Loading prompts…" />
+        ) : (
+          <div className="space-y-4">
+            {promptError && <Alert variant="error">{promptError}</Alert>}
+            {promptMessage && <Alert variant="success">{promptMessage}</Alert>}
+
+            <Select
+              label="Language to edit"
+              value={editPromptLanguage}
+              onChange={(e) => setEditPromptLanguage(e.target.value)}
+              disabled={promptSaving || isActive}
+            >
+              {VOICE_AGENT_LANGUAGES.map((lang) => (
+                <option key={lang.value} value={lang.value}>
+                  {lang.label}
+                </option>
+              ))}
+            </Select>
+
+            <Textarea
+              label="System prompt"
+              hint={`Main instructions for the assistant (max ${VOICE_PROMPT_MAX_SYSTEM_CHARS.toLocaleString()} characters).`}
+              value={systemPrompt}
+              onChange={(e) => setSystemPrompt(e.target.value)}
+              rows={12}
+              disabled={promptSaving || isActive}
+              maxLength={VOICE_PROMPT_MAX_SYSTEM_CHARS}
+            />
+
+            <Textarea
+              label="Greeting prompt"
+              hint={`Instructions for the first message when the assistant joins (max ${VOICE_PROMPT_MAX_GREETING_CHARS.toLocaleString()} characters).`}
+              value={greetingPrompt}
+              onChange={(e) => setGreetingPrompt(e.target.value)}
+              rows={4}
+              disabled={promptSaving || isActive}
+              maxLength={VOICE_PROMPT_MAX_GREETING_CHARS}
+            />
+
+            {promptsByLanguage[editPromptLanguage]?.updatedAt && (
+              <p className="text-xs text-slate-500">
+                Last saved:{' '}
+                {new Date(promptsByLanguage[editPromptLanguage].updatedAt).toLocaleString()}
+              </p>
+            )}
+
+            <div className="flex flex-wrap gap-3">
+              <Button onClick={savePrompts} disabled={promptSaving || isActive}>
+                {promptSaving ? 'Saving…' : 'Save prompts'}
+              </Button>
+              <Button variant="secondary" onClick={resetPrompts} disabled={promptSaving || isActive}>
+                Reset to default
+              </Button>
+            </div>
           </div>
         )}
       </Card>

@@ -39,6 +39,12 @@ enum ProcessingJobStatus {
   FAILED
 }
 
+enum VoiceAgentLanguage {
+  ENGLISH
+  FRENCH
+  ARABIC
+}
+
 model Organization {
   id              String       @id @default(cuid())
   name            String
@@ -195,4 +201,11 @@ model ProcessingJob {
 
   @@index([organizationId])
   @@index([status])
+}
+
+model VoiceAgentPrompt {
+  language       VoiceAgentLanguage @id
+  systemPrompt   String             @db.Text
+  greetingPrompt String             @db.Text
+  updatedAt      DateTime           @updatedAt
 }

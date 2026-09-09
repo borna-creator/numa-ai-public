@@ -6,6 +6,7 @@ import supertokens, { Error as SuperTokensError } from 'supertokens-node'
 import { middleware, errorHandler } from 'supertokens-node/framework/express/index.js'
 import { initSuperTokens } from './supertokens.js'
 import { seedSupremeAdmin } from './services/users.js'
+import { seedVoiceAgentPrompts } from './services/voiceAgentPrompts.js'
 import internalRouter from './routes/internal.js'
 import meRouter from './routes/me.js'
 import organizationsRouter from './routes/organizations.js'
@@ -130,6 +131,12 @@ async function start() {
     await seedSupremeAdmin()
   } catch (err) {
     console.error('⚠ Supreme admin seed failed (SuperTokens may be down):', err.message)
+  }
+
+  try {
+    await seedVoiceAgentPrompts()
+  } catch (err) {
+    console.error('⚠ Voice agent prompt seed failed:', err.message)
   }
 
   app.listen(PORT, () => {

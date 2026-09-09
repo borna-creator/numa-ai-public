@@ -151,6 +151,70 @@ LIVEKIT_URL=ws://127.0.0.1:7880
 
 Super admin → **Voice Assistant** → pick **English / French / Arabic** → Start conversation.
 
+**VPS 1 (first deploy with prompts):** run the DB migration before restarting the API:
+
+```bash
+cd /var/www/numaiq
+git pull
+npx prisma migrate deploy
+npm run build
+sudo systemctl restart numaiq-api
+```
+
+---
+
+## 6. Editable agent prompts (Super admin UI)
+
+Prompts are stored in **VPS1 Postgres** and sent to agents on each new session via LiveKit dispatch **metadata** — no agent restart needed after edits.
+
+### Flow
+
+```
+Super admin UI  →  PATCH /api/voice/prompts/:language  →  Postgres
+Start session   →  worker createDispatch(metadata: { systemPrompt, greetingPrompt })
+Python agent    →  reads ctx.job.metadata per job
+```
+
+### UI
+
+Super admin → **Voice Assistant** → **Agent prompts** card:
+
+- Edit **system prompt** (behavior / language rules)
+- Edit **greeting prompt** (first spoken message)
+- **Save** or **Reset to default** per language
+
+### Wire prompts into Python agents (VPS 2)
+
+Copy the loader from the worker repo:
+
+```bash
+cp /var/www/worker/deploy/voice-agent/prompt_loader.py /var/www/voice-agent/
+```
+
+In each `agent_en.py`, `agent_fr.py`, `agent_ar.py` entrypoint:
+
+```python
+from prompt_loader import load_session_prompts
+
+# Inside your agent entrypoint (after ctx is available):
+prompts = load_session_prompts(
+    ctx.job.metadata,
+    default_system=YOUR_FILE_DEFAULT_SYSTEM,
+    default_greeting=YOUR_FILE_DEFAULT_GREETING,
+)
+
+# Use prompts.system for Agent(instructions=...)
+# Use prompts.greeting for the on_enter / first reply
+```
+
+Keep your file-level defaults as fallbacks when metadata is empty (e.g. manual `lk dispatch` without prompts).
+
+Restart agent services after updating Python files:
+
+```bash
+sudo systemctl restart numa-voice-agent-en numa-voice-agent-fr numa-voice-agent-ar
+```
+
 ---
 
 ## Troubleshooting

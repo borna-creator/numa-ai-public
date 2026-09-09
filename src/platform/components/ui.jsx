@@ -89,11 +89,12 @@ export function Select({ label, hint, className = '', children, ...props }) {
   )
 }
 
-export function Textarea({ label, className = '', ...props }) {
+export function Textarea({ label, hint, className = '', ...props }) {
   return (
     <label className={`block ${className}`}>
       {label && <span className="block text-sm font-medium text-slate-700 mb-1.5">{label}</span>}
       <textarea className={`${FIELD} min-h-[88px] resize-y`} {...props} />
+      {hint && <span className="block text-xs text-slate-500 mt-1.5">{hint}</span>}
     </label>
   )
 }
