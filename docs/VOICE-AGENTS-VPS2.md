@@ -16,11 +16,18 @@ Later, move LiveKit + agents to a dedicated VPS by changing `LIVEKIT_URL` / `LIV
 
 ## 1. Start LiveKit server (VPS 2)
 
+Your worker repo is at `/var/www/worker`. LiveKit files live in **`deploy/livekit/`** inside that repo (not the main numa-ai-public repo).
+
 ```bash
-cd /var/www/worker   # or clone repo and use deploy/livekit
+cd /var/www/worker
+git pull
+
 mkdir -p /opt/livekit
 cp deploy/livekit/docker-compose.yml /opt/livekit/
 cp deploy/livekit/livekit.yaml.example /opt/livekit/livekit.yaml
+```
+
+Note: the path is **`/opt/livekit`** (letter **o**), not `/otp/livekit`.
 
 # Generate API key + secret
 docker run --rm livekit/livekit-server generate-keys
@@ -34,7 +41,9 @@ curl -s http://127.0.0.1:7880 && echo " LiveKit OK"
 Open firewall (if needed):
 
 - TCP `7880`, `7881`
-- UDP `50000-60000` (WebRTC media)
+- UDP `50000-50100` (WebRTC media — smaller range avoids Docker proxy issues)
+
+If Docker fails with `failed to start userland proxy` on UDP ports, use the **host networking** compose file (included in `deploy/livekit/docker-compose.yml`) and set `redis: address: 127.0.0.1:6379` in `livekit.yaml`.
 
 ---
 

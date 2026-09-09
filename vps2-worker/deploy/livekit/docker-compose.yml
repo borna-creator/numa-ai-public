@@ -1,5 +1,7 @@
 # Self-hosted LiveKit on VPS 2.
 # Host networking avoids docker-proxy UDP port mapping failures on many VPS providers.
+# Copy livekit.yaml.example → livekit.yaml and add keys from:
+#   docker run --rm livekit/livekit-server generate-keys
 
 services:
   redis:
