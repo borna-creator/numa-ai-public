@@ -1,7 +1,5 @@
-import {
-  DEFAULT_VOICE_AGENT_PROMPTS,
-  VOICE_AGENT_LANGUAGE_VALUES,
-} from '../../shared/voiceAgentPrompts.js'
+import { VOICE_AGENT_LANGUAGE_VALUES } from '../../shared/voiceAgents.js'
+import { DEFAULT_VOICE_AGENT_PROMPTS } from '../../shared/voiceAgentPrompts.js'
 import { prisma } from '../db.js'
 
 function toApiPrompt(row) {
