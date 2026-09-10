@@ -7,6 +7,7 @@ const navLinks = [
   { label: 'QA Platform', href: '/#qa-platform' },
   { label: 'Languages', href: '/#languages' },
   { label: 'Features', href: '/#features' },
+  { label: 'Pricing', href: '/#pricing' },
   { label: 'Team', href: '/#team' },
 ]
 

@@ -54,6 +54,7 @@ export default function Footer() {
               <a href="/#voice-agents" className="hover:text-numa-600 transition-colors">Voice Agents</a>
               <a href="/#qa-platform" className="hover:text-numa-600 transition-colors">QA Platform</a>
               <a href="/#languages" className="hover:text-numa-600 transition-colors">Languages</a>
+              <a href="/#pricing" className="hover:text-numa-600 transition-colors">Pricing</a>
               <a href="/#team" className="hover:text-numa-600 transition-colors">Team</a>
               <a href="/#contact" className="hover:text-numa-600 transition-colors">Contact</a>
             </div>

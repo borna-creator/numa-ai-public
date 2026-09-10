@@ -6,6 +6,7 @@ import VoiceAgents from '../components/VoiceAgents'
 import QAPlatform from '../components/QAPlatform'
 import Languages from '../components/Languages'
 import Features from '../components/Features'
+import Pricing from '../components/Pricing'
 import Team from '../components/Team'
 import CTA from '../components/CTA'
 import Footer from '../components/Footer'
@@ -35,6 +36,7 @@ export default function HomePage() {
           <QAPlatform />
           <Languages />
           <Features />
+          <Pricing />
           <Team />
           <CTA />
         </main>
